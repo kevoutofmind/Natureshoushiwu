@@ -1,0 +1,27 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AiTeachingModule } from './ai-teaching/ai-teaching.module';
+import { DataPipelineModule } from './data-pipeline';
+import { DatabaseModule } from './database/database.module';
+import { DraftsModule } from './drafts/drafts.module';
+import { MediaAssetsModule } from './media-assets';
+import { PopularDancesModule } from './popular-dances/popular-dances.module';
+import { UsersModule } from './users/users.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    DatabaseModule,
+    MediaAssetsModule,
+    DataPipelineModule,
+    UsersModule,
+    PopularDancesModule,
+    AiTeachingModule,
+    DraftsModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
