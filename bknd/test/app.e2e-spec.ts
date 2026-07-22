@@ -45,4 +45,17 @@ describe('AppController (e2e)', () => {
       },
     });
   });
+
+  it('/api/vlm-core/health (GET)', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/vlm-core/health')
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      status: 'ready',
+      realtimeMode: 'local-skeleton-template',
+      cloudRequiredForRealtime: false,
+      provider: 'mock',
+    });
+  });
 });

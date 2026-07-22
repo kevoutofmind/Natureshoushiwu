@@ -1,0 +1,32 @@
+export const VLM_ISSUE_CODES = [
+  'NO_SIGNIFICANT_ERROR',
+  'ELBOW_TOO_STRAIGHT',
+  'ELBOW_TOO_BENT',
+  'WRIST_TOO_LOW',
+  'WRIST_TOO_HIGH',
+  'BODY_LEAN_LEFT',
+  'BODY_LEAN_RIGHT',
+  'TIMING_TOO_EARLY',
+  'TIMING_TOO_LATE',
+  'WRONG_HAND_SHAPE',
+  'LEFT_RIGHT_ASYMMETRY',
+  'WRONG_DIRECTION',
+  'INSUFFICIENT_VISIBILITY',
+  'FRAME_ALIGNMENT_UNCERTAIN',
+  'PARTIAL_ATTEMPT',
+  'UNKNOWN_MOTION_ERROR',
+] as const;
+
+export type VlmIssueCode = (typeof VLM_ISSUE_CODES)[number];
+
+export const VLM_ABSTAIN_REASONS = [
+  'INSUFFICIENT_VISIBILITY',
+  'FRAME_ALIGNMENT_UNCERTAIN',
+  'NO_REFERENCE_AVAILABLE',
+  'INVALID_INPUT',
+  'PROVIDER_UNAVAILABLE',
+] as const;
+
+export type VlmAbstainReason = (typeof VLM_ABSTAIN_REASONS)[number];
+
+export type VlmSeverity = 'low' | 'medium' | 'high';

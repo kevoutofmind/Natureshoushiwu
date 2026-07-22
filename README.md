@@ -32,7 +32,7 @@
 | `@mui/material` | Material UI 组件 |
 | `@mui/icons-material` | Material UI 图标 |
 | `@emotion/react`、`@emotion/styled` | Material UI 样式引擎 |
-| `@mediapipe/pose` | 动作关键点能力 |
+| `@mediapipe/tasks-vision` | MediaPipe Holistic 姿态与双手关键点能力 |
 | `typescript` | TypeScript |
 | `eslint`、`eslint-config-next` | 前端代码检查 |
 
@@ -182,6 +182,14 @@ FRONTEND_ORIGIN=http://localhost:3000
 DATABASE_URL=postgresql://flight_user:flight_password@localhost:5434/tiktok_ai
 JWT_SECRET=请替换为随机生成的长字符串
 JWT_EXPIRES_IN=7d
+VLM_PROVIDER=mock
+VLM_API_URL=
+VLM_API_KEY=
+VLM_MODEL=
+VLM_TIMEOUT_MS=4000
+VLM_MAX_RETRIES=1
+VLM_TEMPERATURE=0.1
+VLM_JSON_MODE=true
 ```
 
 生成 JWT Secret：
@@ -288,7 +296,7 @@ npm run dev
 | 数据库 | PostgreSQL 16、`pg` | 用户和后续业务元数据 |
 | 认证 | JWT、bcryptjs | 登录状态和密码哈希 |
 | 浏览器能力 | MediaRecorder、IndexedDB | 摄像头录制和本地草稿 |
-| 视觉依赖 | MediaPipe Pose | 后续动作关键点能力 |
+| 视觉依赖 | MediaPipe Tasks Vision | 本地姿态、双手关键点和骨骼对齐 |
 
 API 在 NestJS Controller 中实现，并统一登记到 Swagger。Swagger 是 API 文档和调试入口，不是业务代码的存放位置。
 
@@ -303,6 +311,8 @@ API 在 NestJS Controller 中实现，并统一登记到 Swagger。Swagger 是 A
 - 浏览器摄像头录制。
 - IndexedDB 本地草稿预览、删除和下载。
 - 浏览器语音转文字，以及暂停、继续、倍速、前后跳转、重新开始和录制等简单指令的后端解析。
+- MediaPipe Holistic 本地骨骼叠加、参考帧与跟练帧对齐，并可导出结构化 JSON。
+- VLM Core 提供本地模板判别、规则分析、教学 Agent 和版本化 Prompt；默认使用不需要密钥的 mock Provider。
 - VLM 教学反馈前端契约已支持 `shouldAdvance`、`shouldPause`、`KEEP_WATCHING` 和 `NOT_VISIBLE` 四类视觉反应。
 - Swagger UI 和 OpenAPI JSON。
 
@@ -313,10 +323,11 @@ API 在 NestJS Controller 中实现，并统一登记到 Swagger。Swagger 是 A
 | 前端框架 | 登录、导航、热门手势舞、AI 教学和草稿箱页面已连通 | 接入真实舞蹈封面、视频和教学数据后直接替换空数据状态 |
 | 用户与数据库 | 注册、登录、JWT、`/users/me` 和 PostgreSQL `users` 表已连通 | 后续业务表由数据结构确定后通过迁移脚本增加 |
 | 语音控制 | 麦克风转文字、文字测试、简单意图解析 API 和 Swagger 契约已完成 | 指令已保留回调接口；复杂语义和视频时间轴执行由 VLM、video-stage 联调 |
-| AI 教学与录制 | 双竖屏、摄像头录制、保存草稿、视觉反馈适配器已完成 | 原视频播放、动作切片、VLM 推理结果由对应模块提供 |
+| AI 教学与录制 | 双竖屏、参考视频导入、MediaPipe 骨骼对齐、摄像头录制、保存草稿和视觉反馈适配器已完成 | 真实动作模板和舞蹈视频由数据模块提供 |
+| VLM Core | 本地规则判别、骨骼模板匹配、教学 Agent、Prompt 管理和 mock Provider 已接入 Swagger | 云端增强需在后端配置兼容 Provider 的 URL、Key 和模型名 |
 | 草稿箱 | 录制结果使用 IndexedDB 本地保存，可预览、删除和下载 | 当前不上传服务器；需要云草稿时再新增存储 API 和业务表 |
 
-当前仓库是可以独立运行和继续集成的产品基础版本。VLM 推理、真实视频数据、动作切片和云端媒体存储仍属于后续团队模块，README 不将这些尚未接入的能力标记为已完成。
+当前仓库是可以独立运行和继续集成的产品基础版本。真实视频数据、动作模板、云端 VLM 密钥和云端媒体存储仍需后续接入，README 不将这些外部资源标记为已完成。
 
 ## 8. 项目目录
 
@@ -330,7 +341,7 @@ Tiktok-AI/
 │  │  ├─ features/
 │  │  │  ├─ popular-dances/     # 热门手势舞
 │  │  │  ├─ ai-teaching/        # AI 教学页面组合
-│  │  │  ├─ video-stage/        # 视频舞台功能骨架
+│  │  │  ├─ video-stage/        # MediaPipe 骨骼识别与视频舞台
 │  │  │  ├─ voice-control/      # 浏览器语音输入
 │  │  │  └─ drafts/             # IndexedDB 草稿
 │  │  ├─ lib/                    # 认证客户端等通用代码
@@ -377,6 +388,11 @@ Tiktok-AI/
 | GET | `/api/ai-teaching/workspace` | 获取教学工作区状态 |
 | GET | `/api/drafts` | 获取草稿存储状态 |
 | POST | `/api/voice/commands/interpret` | 解析简单语音指令并返回结构化意图 |
+| GET | `/api/vlm-core/health` | 查看本地判别引擎和 VLM Provider 状态 |
+| POST | `/api/vlm-core/templates/register` | 注册舞蹈动作骨骼模板 |
+| POST | `/api/vlm-core/realtime/decide` | 执行本地实时动作判别 |
+| POST | `/api/vlm-core/analyze` | 分析结构化视觉对比结果 |
+| GET/POST | `/api/vlm-core/agent/*` | Prompt、课程计划和教学会话 API |
 
 ### 9.1 在 Swagger 中测试登录
 
