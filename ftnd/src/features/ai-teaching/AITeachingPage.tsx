@@ -17,6 +17,10 @@ import {
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { saveDraft } from '@/features/drafts/draft-store';
+import { SkeletonOverlay } from '@/features/video-stage/components/SkeletonOverlay';
+import { useHolisticLandmarker } from '@/features/video-stage/hooks/useHolisticLandmarker';
+import { averageVisibility, compareGeometry, mirrorSkeleton } from '@/features/video-stage/vision-geometry';
+import type { SkeletonSnapshot, VisionComparisonPayload } from '@/features/video-stage/vision-types';
 import { VoiceControlPanel } from '@/features/voice-control';
 import { getTeachingWorkspace } from './api';
 
@@ -30,6 +34,10 @@ function getRecordingMimeType() {
 export default function AITeachingPage({ danceId }: { danceId?: string }) {
   const router = useRouter();
   const liveVideoRef = useRef<HTMLVideoElement>(null);
+  const referenceVideoRef = useRef<HTMLVideoElement>(null);
+  const referenceUrlRef = useRef<string | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const { load: loadVision, detect, state: visionState, error: visionError } = useHolisticLandmarker();
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -40,6 +48,10 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [referenceUrl, setReferenceUrl] = useState('');
+  const [liveSkeleton, setLiveSkeleton] = useState<SkeletonSnapshot | null>(null);
+  const [referenceSkeleton, setReferenceSkeleton] = useState<SkeletonSnapshot | null>(null);
+  const [comparison, setComparison] = useState<VisionComparisonPayload | null>(null);
 
   useEffect(() => {
     getTeachingWorkspace(danceId)
@@ -52,10 +64,67 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     () => () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      if (referenceUrlRef.current) URL.revokeObjectURL(referenceUrlRef.current);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     },
     [],
   );
 
+  useEffect(() => {
+    if (visionState !== 'ready' || recordingState === 'idle' || previewUrl) return;
+    let active = true;
+    const tick = () => {
+      const video = liveVideoRef.current;
+      if (active && video?.readyState && !video.paused) {
+        const result = detect(video);
+        if (result) setLiveSkeleton(result);
+      }
+      if (active) animationRef.current = requestAnimationFrame(tick);
+    };
+    animationRef.current = requestAnimationFrame(tick);
+    return () => { active = false; if (animationRef.current) cancelAnimationFrame(animationRef.current); };
+  }, [detect, previewUrl, recordingState, visionState]);
+
+  const selectReference = (file?: File) => {
+    if (!file) return;
+    if (referenceUrlRef.current) URL.revokeObjectURL(referenceUrlRef.current);
+    const url = URL.createObjectURL(file); referenceUrlRef.current = url;
+    setReferenceUrl(url); setReferenceSkeleton(null); setComparison(null);
+  };
+
+  const canvasFrame = (video: HTMLVideoElement, mirrored: boolean) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 360; canvas.height = video.videoHeight || 640;
+    const ctx = canvas.getContext('2d'); if (!ctx) return '';
+    if (mirrored) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  };
+
+  const captureComparison = () => {
+    const reference = referenceVideoRef.current; const practice = liveVideoRef.current;
+    if (!reference || !practice || visionState !== 'ready') { setError('请先加载模型、参考视频并打开摄像头。'); return; }
+    const referenceResult = detect(reference, performance.now());
+    const practiceResult = detect(practice, performance.now() + 1);
+    if (!referenceResult || !practiceResult) { setError('当前帧未检测到完整人体，请调整站位后重试。'); return; }
+    const mirroredPractice = mirrorSkeleton(practiceResult);
+    setReferenceSkeleton(referenceResult); setLiveSkeleton(practiceResult);
+    const now = Date.now();
+    setComparison({ schemaVersion: 'vision-output-v0', sessionId: `session-${now}`, sampleId: `sample-${now}`,
+      actionId: danceId ?? 'unassigned-dance', motionId: 'motion-manual-001', status: 'COMPLETED', selectedReferenceId: 'reference-manual-001',
+      referenceFrame: { timestampMs: Math.round(reference.currentTime * 1000), imageDataUrl: canvasFrame(reference, false) },
+      practiceFrame: { timestampMs: practiceResult.timestampMs, imageDataUrl: canvasFrame(practice, true) },
+      landmarks: { reference: referenceResult, practice: mirroredPractice }, measurements: compareGeometry(referenceResult, mirroredPractice),
+      quality: { bodyVisibility: averageVisibility(practiceResult.pose), leftHandVisibility: averageVisibility(practiceResult.leftHand), rightHandVisibility: averageVisibility(practiceResult.rightHand), alignmentConfidence: 1, mirrored: true },
+      metadata: { model: 'mediapipe-holistic-landmarker', normalizationVersion: 'skeleton-normalization-v1', alignmentVersion: 'single-keyframe-v1' },
+    }); setError('');
+  };
+
+  const downloadComparison = () => {
+    if (!comparison) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(comparison, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a'); link.href = url; link.download = `${comparison.sampleId}.json`; link.click(); URL.revokeObjectURL(url);
+  };
   const startCamera = async () => {
     setError('');
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -75,6 +144,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
         await liveVideoRef.current.play();
       }
       setRecordingState('camera-ready');
+      await loadVision();
     } catch {
       setError('无法打开摄像头，请检查浏览器摄像头权限。');
     }
@@ -168,6 +238,8 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
         </Stack>
       </Stack>
 
+      {(visionState === 'loading' || visionError) && <Alert severity={visionError ? 'error' : 'info'} className="teaching-alert">{visionError || '正在加载本地骨骼模型…'}</Alert>}
+
       {error && (
         <Alert severity="error" className="teaching-alert">
           {error}
@@ -185,17 +257,16 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
             <Typography variant="h6" fontWeight={850}>
               原手势舞
             </Typography>
-            <Chip label="等待视频" size="small" variant="outlined" />
+            <Chip label={referenceUrl ? '参考视频已加载' : '等待视频'} size="small" variant="outlined" />
           </Stack>
 
           <Box className="studio-screen-area">
             <Box className="phone-stage reference-phone">
-              <PauseCircleOutlineRoundedIcon />
-              <Typography fontWeight={800}>等待原视频</Typography>
+              {referenceUrl ? <><video ref={referenceVideoRef} src={referenceUrl} controls playsInline /><SkeletonOverlay snapshot={referenceSkeleton} mirrored={false} /></> : <><PauseCircleOutlineRoundedIcon /><Typography fontWeight={800}>等待原视频</Typography></>}
             </Box>
           </Box>
 
-          <Box className="studio-actions" aria-hidden="true" />
+          <Stack className="studio-actions" direction="row" justifyContent="center" alignItems="center" gap={1}><Button component="label" variant="outlined">导入参考视频<input hidden type="file" accept="video/*" onChange={(event) => selectReference(event.target.files?.[0])} /></Button></Stack>
         </Paper>
 
         <Paper className="feature-panel studio-panel" elevation={0}>
@@ -217,6 +288,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
               ) : (
                 <>
                   <video ref={liveVideoRef} muted playsInline />
+                  <SkeletonOverlay snapshot={liveSkeleton} />
                   {recordingState === 'idle' && (
                     <Stack className="camera-placeholder" alignItems="center">
                       <CameraswitchRoundedIcon />
@@ -283,6 +355,8 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                 </Button>
               </>
             )}
+            <Button variant="outlined" onClick={captureComparison} disabled={!referenceUrl || visionState !== 'ready'}>冻结对齐帧</Button>
+            {comparison && <Button variant="outlined" onClick={downloadComparison}>导出 JSON</Button>}
             <VoiceControlPanel />
           </Stack>
         </Paper>
