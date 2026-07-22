@@ -19,6 +19,13 @@ export interface AuthApiResponse {
   fieldErrors?: Partial<Record<'email' | 'password', string>>;
 }
 
+interface CurrentUserApiResponse {
+  success: boolean;
+  code: string;
+  message: string;
+  data?: { user: AuthUser };
+}
+
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/api';
 
@@ -55,6 +62,28 @@ export async function submitCredentials(
 
 export function saveSession(session: AuthSession) {
   window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+}
+
+export async function validateSession(
+  session: AuthSession,
+): Promise<AuthSession | null> {
+  const response = await fetch(`${apiBaseUrl}/users/me`, {
+    headers: { Authorization: `Bearer ${session.accessToken}` },
+    cache: 'no-store',
+  });
+
+  if (response.status === 401) return null;
+  if (!response.ok) {
+    throw new Error('登录状态校验服务暂时不可用。');
+  }
+
+  const payload = (await response.json()) as CurrentUserApiResponse;
+  if (!payload.success || !payload.data?.user) return null;
+
+  return {
+    accessToken: session.accessToken,
+    user: payload.data.user,
+  };
 }
 
 export function readSession(): AuthSession | null {

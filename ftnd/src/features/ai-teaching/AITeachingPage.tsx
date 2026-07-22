@@ -2,16 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 import CameraswitchRoundedIcon from '@mui/icons-material/CameraswitchRounded';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import FiberManualRecordRoundedIcon from '@mui/icons-material/FiberManualRecordRounded';
+import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
+import GraphicEqRoundedIcon from '@mui/icons-material/GraphicEqRounded';
 import PauseCircleOutlineRoundedIcon from '@mui/icons-material/PauseCircleOutlineRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import StopCircleRoundedIcon from '@mui/icons-material/StopCircleRounded';
+import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
 import {
   Alert,
   Box,
   Button,
   Chip,
-  Paper,
   Stack,
   Typography,
 } from '@mui/material';
@@ -19,17 +22,25 @@ import { useRouter } from 'next/navigation';
 import { saveDraft } from '@/features/drafts/draft-store';
 import { VoiceControlPanel } from '@/features/voice-control';
 import { getTeachingWorkspace } from './api';
+import TeachingSidePanel from './components/TeachingSidePanel';
+import {
+  VlmCoachFeedback,
+  VlmProgressFeedback,
+  VlmStageFeedbackOverlay,
+} from './components/VlmFeedbackWidgets';
+import { useVlmTeachingFeedback } from './hooks/useVlmTeachingFeedback';
 
 type RecordingState = 'idle' | 'camera-ready' | 'recording' | 'recorded';
 
 function getRecordingMimeType() {
-  const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  const candidates = ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
 }
 
 export default function AITeachingPage({ danceId }: { danceId?: string }) {
   const router = useRouter();
   const liveVideoRef = useRef<HTMLVideoElement>(null);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -40,6 +51,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const { actionIndex, reaction: vlmReaction } = useVlmTeachingFeedback();
 
   useEffect(() => {
     getTeachingWorkspace(danceId)
@@ -51,10 +63,26 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   useEffect(
     () => () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      if (previewUrlRef.current) {
+        previewVideoRef.current?.pause();
+        previewVideoRef.current?.removeAttribute('src');
+        previewVideoRef.current?.load();
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
     },
     [],
   );
+
+  useEffect(() => {
+    const liveVideo = liveVideoRef.current;
+    const stream = streamRef.current;
+    if (recordingState !== 'camera-ready' || !liveVideo || !stream) return;
+
+    liveVideo.srcObject = stream;
+    void liveVideo.play().catch(() => {
+      setError('摄像头画面无法播放，请重新打开摄像头。');
+    });
+  }, [recordingState]);
 
   const startCamera = async () => {
     setError('');
@@ -70,10 +98,16 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
       });
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = stream;
-      if (liveVideoRef.current) {
-        liveVideoRef.current.srcObject = stream;
-        await liveVideoRef.current.play();
+
+      if (previewUrlRef.current) {
+        previewVideoRef.current?.pause();
+        previewVideoRef.current?.removeAttribute('src');
+        previewVideoRef.current?.load();
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
       }
+      setPreviewUrl('');
+      setRecordedBlob(null);
       setRecordingState('camera-ready');
     } catch {
       setError('无法打开摄像头，请检查浏览器摄像头权限。');
@@ -88,6 +122,9 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     }
 
     if (previewUrlRef.current) {
+      previewVideoRef.current?.pause();
+      previewVideoRef.current?.removeAttribute('src');
+      previewVideoRef.current?.load();
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
     }
@@ -107,6 +144,15 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
       const blob = new Blob(chunksRef.current, {
         type: recorder.mimeType || 'video/webm',
       });
+
+      if (blob.size === 0) {
+        setRecordedBlob(null);
+        setPreviewUrl('');
+        setRecordingState('camera-ready');
+        setError('没有录制到有效视频，请检查摄像头后重新录制。');
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
       previewUrlRef.current = url;
       setRecordedBlob(blob);
@@ -174,118 +220,154 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
         </Alert>
       )}
 
-      <Box className="studio-layout">
-        <Paper className="feature-panel studio-panel" elevation={0}>
-          <Stack
-            className="studio-panel-header"
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
+      <Box className="teaching-studio-workspace">
+        <Stack className="teaching-side-rail" gap={1.5}>
+          <TeachingSidePanel
+            title="教学进度"
+            icon={<TimelineRoundedIcon />}
           >
-            <Typography variant="h6" fontWeight={850}>
-              原手势舞
-            </Typography>
-            <Chip label="等待视频" size="small" variant="outlined" />
-          </Stack>
+            <VlmProgressFeedback
+              actionIndex={actionIndex}
+              reaction={vlmReaction}
+            />
+          </TeachingSidePanel>
+          <TeachingSidePanel
+            title="动作拆解"
+            icon={<AutoAwesomeRoundedIcon />}
+          />
+        </Stack>
 
-          <Box className="studio-screen-area">
-            <Box className="phone-stage reference-phone">
-              <PauseCircleOutlineRoundedIcon />
-              <Typography fontWeight={800}>等待原视频</Typography>
+        <Box className="studio-layout">
+          <Box className="studio-column studio-column-reference">
+            <Box className="studio-panel-header">
+              <Typography variant="h6" fontWeight={850}>
+                原手势舞
+              </Typography>
             </Box>
+
+            <Box className="studio-screen-area studio-screen-area-reference">
+              <Box className="phone-stage reference-phone">
+                <PauseCircleOutlineRoundedIcon />
+                <Typography fontWeight={800}>等待原视频</Typography>
+                <VlmStageFeedbackOverlay
+                  actionIndex={actionIndex}
+                  reaction={vlmReaction}
+                  stage="reference"
+                />
+              </Box>
+            </Box>
+
+            <Box className="studio-actions" aria-hidden="true" />
           </Box>
 
-          <Box className="studio-actions" aria-hidden="true" />
-        </Paper>
-
-        <Paper className="feature-panel studio-panel" elevation={0}>
-          <Stack
-            className="studio-panel-header"
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-          >
-            <Typography variant="h6" fontWeight={850}>
-              跟练录制
-            </Typography>
-          </Stack>
-
-          <Box className="studio-screen-area">
-            <Box className="phone-stage camera-stage">
-              {previewUrl ? (
-                <video src={previewUrl} controls playsInline />
-              ) : (
-                <>
-                  <video ref={liveVideoRef} muted playsInline />
-                  {recordingState === 'idle' && (
-                    <Stack className="camera-placeholder" alignItems="center">
-                      <CameraswitchRoundedIcon />
-                      <Typography fontWeight={800}>等待摄像头</Typography>
-                    </Stack>
-                  )}
-                </>
-              )}
-              {recordingState === 'recording' && (
-                <Box className="recording-indicator">REC</Box>
-              )}
+          <Box className="studio-column studio-column-camera">
+            <Box className="studio-panel-header">
+              <Typography variant="h6" fontWeight={850}>
+                跟练教学
+              </Typography>
             </Box>
-          </Box>
 
-          <Stack
-            className="studio-actions"
-            direction="row"
-            justifyContent="center"
-            alignItems="center"
-            gap={1.2}
-            flexWrap="wrap"
-          >
-            {recordingState === 'idle' && (
-              <Button
-                variant="contained"
-                onClick={startCamera}
-                startIcon={<CameraswitchRoundedIcon />}
-              >
-                打开摄像头
-              </Button>
-            )}
-            {recordingState === 'camera-ready' && (
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={startRecording}
-                startIcon={<FiberManualRecordRoundedIcon />}
-              >
-                开始录制
-              </Button>
-            )}
-            {recordingState === 'recording' && (
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={stopRecording}
-                startIcon={<StopCircleRoundedIcon />}
-              >
-                停止录制
-              </Button>
-            )}
-            {recordingState === 'recorded' && (
-              <>
+            <Box className="studio-screen-area studio-screen-area-camera">
+              <Box className="phone-stage camera-stage">
+                {previewUrl ? (
+                  <video
+                    ref={previewVideoRef}
+                    src={previewUrl}
+                    controls
+                    playsInline
+                    preload="none"
+                  />
+                ) : (
+                  <>
+                    <video ref={liveVideoRef} muted playsInline />
+                    {recordingState === 'idle' && (
+                      <Stack className="camera-placeholder" alignItems="center">
+                        <CameraswitchRoundedIcon />
+                        <Typography fontWeight={800}>等待摄像头</Typography>
+                      </Stack>
+                    )}
+                  </>
+                )}
+                {recordingState === 'recording' && (
+                  <Box className="recording-indicator">REC</Box>
+                )}
+                <VlmStageFeedbackOverlay
+                  actionIndex={actionIndex}
+                  reaction={vlmReaction}
+                  stage="camera"
+                />
+              </Box>
+            </Box>
+
+            <Stack
+              className="studio-actions"
+              direction="row"
+              justifyContent="center"
+              alignItems="center"
+              gap={1.2}
+              flexWrap="wrap"
+            >
+              {recordingState === 'idle' && (
                 <Button
                   variant="contained"
-                  onClick={storeDraft}
-                  disabled={saving}
-                  startIcon={<SaveRoundedIcon />}
+                  onClick={startCamera}
+                  startIcon={<CameraswitchRoundedIcon />}
                 >
-                  {saving ? '保存中…' : '保存到草稿箱'}
+                  打开摄像头
                 </Button>
-                <Button variant="outlined" onClick={startCamera}>
-                  重新录制
+              )}
+              {recordingState === 'camera-ready' && (
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={startRecording}
+                  startIcon={<FiberManualRecordRoundedIcon />}
+                >
+                  开始录制
                 </Button>
-              </>
-            )}
-            <VoiceControlPanel />
-          </Stack>
-        </Paper>
+              )}
+              {recordingState === 'recording' && (
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={stopRecording}
+                  startIcon={<StopCircleRoundedIcon />}
+                >
+                  停止录制
+                </Button>
+              )}
+              {recordingState === 'recorded' && (
+                <>
+                  <Button
+                    variant="contained"
+                    onClick={storeDraft}
+                    disabled={saving}
+                    startIcon={<SaveRoundedIcon />}
+                  >
+                    {saving ? '保存中…' : '保存到草稿箱'}
+                  </Button>
+                  <Button variant="outlined" onClick={startCamera}>
+                    重新录制
+                  </Button>
+                </>
+              )}
+              <VoiceControlPanel />
+            </Stack>
+          </Box>
+        </Box>
+
+        <Stack className="teaching-side-rail" gap={1.5}>
+          <TeachingSidePanel title="AI 教练" icon={<ForumRoundedIcon />}>
+            <VlmCoachFeedback
+              actionIndex={actionIndex}
+              reaction={vlmReaction}
+            />
+          </TeachingSidePanel>
+          <TeachingSidePanel
+            title="语音记录"
+            icon={<GraphicEqRoundedIcon />}
+          />
+        </Stack>
       </Box>
     </Box>
   );

@@ -26,4 +26,23 @@ describe('AppController (e2e)', () => {
       service: 'tiktok-ai-api',
     });
   });
+
+  it('/api/voice/commands/interpret (POST)', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/voice/commands/interpret')
+      .send({ transcript: '倒回五秒' })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      success: true,
+      code: 'VOICE_COMMAND_RECOGNIZED',
+      data: {
+        accepted: true,
+        command: {
+          intent: 'REWIND',
+          parameters: { seconds: 5 },
+        },
+      },
+    });
+  });
 });

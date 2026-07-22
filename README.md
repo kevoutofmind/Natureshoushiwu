@@ -1,6 +1,6 @@
 # MOVE / MATCH · TikTok AI
 
-抖音黑客松网页端项目，方向为多模态视觉搜索、VLM 动作教学与语音控制。当前项目包含注册登录、热门手势舞入口、AI 教学双竖屏工作台、摄像头录制和本地草稿下载等基础能力。
+抖音黑客松网页端项目，方向为多模态视觉搜索、VLM 动作教学与语音控制。当前项目包含注册登录、热门手势舞入口、AI 教学双竖屏工作台、摄像头录制、本地草稿下载，以及浏览器语音输入和简单指令解析。
 
 ## 1. 环境依赖
 
@@ -218,6 +218,14 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:3001/api
 
 建议依次启动数据库、后端和前端。
 
+Windows 下也可以在项目根目录执行一键启动脚本。脚本会自动寻找 npm、检查 Docker、启动已有 PostgreSQL 容器，并依次启动后端和前端：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local-dev.ps1
+```
+
+首次运行仍需先完成第 2～4 节的依赖、数据库和环境变量配置。
+
 ### 5.1 启动数据库
 
 根据本机容器名称执行其中一个命令：
@@ -287,14 +295,28 @@ API 在 NestJS Controller 中实现，并统一登记到 Swagger。Swagger 是 A
 ## 7. 当前功能
 
 - TikTok Pink `#FE2C55`、TikTok Aqua `#25F4EE`、黑白故障艺术主题。
-- 邮箱和密码注册、登录、JWT 状态验证和退出登录。
+- 邮箱和密码注册、登录、JWT 状态验证和退出登录；用户和密码哈希持久化到 PostgreSQL。
 - 密码必须包含至少 1 个英文字母和 1 个数字，最长 72 位且不允许空格。
 - 热门手势舞页面采用可滚动数据流，目前不生成模拟视频。
 - 从热门舞蹈选择结果携带 `danceId` 进入 AI 教学。
 - AI 教学包含原视频和跟练录制两个等大的 `9:16` 竖屏。
 - 浏览器摄像头录制。
 - IndexedDB 本地草稿预览、删除和下载。
+- 浏览器语音转文字，以及暂停、继续、倍速、前后跳转、重新开始和录制等简单指令的后端解析。
+- VLM 教学反馈前端契约已支持 `shouldAdvance`、`shouldPause`、`KEEP_WATCHING` 和 `NOT_VISIBLE` 四类视觉反应。
 - Swagger UI 和 OpenAPI JSON。
+
+### 7.1 交接边界
+
+| 模块 | 当前状态 | 后续接入点 |
+| --- | --- | --- |
+| 前端框架 | 登录、导航、热门手势舞、AI 教学和草稿箱页面已连通 | 接入真实舞蹈封面、视频和教学数据后直接替换空数据状态 |
+| 用户与数据库 | 注册、登录、JWT、`/users/me` 和 PostgreSQL `users` 表已连通 | 后续业务表由数据结构确定后通过迁移脚本增加 |
+| 语音控制 | 麦克风转文字、文字测试、简单意图解析 API 和 Swagger 契约已完成 | 指令已保留回调接口；复杂语义和视频时间轴执行由 VLM、video-stage 联调 |
+| AI 教学与录制 | 双竖屏、摄像头录制、保存草稿、视觉反馈适配器已完成 | 原视频播放、动作切片、VLM 推理结果由对应模块提供 |
+| 草稿箱 | 录制结果使用 IndexedDB 本地保存，可预览、删除和下载 | 当前不上传服务器；需要云草稿时再新增存储 API 和业务表 |
+
+当前仓库是可以独立运行和继续集成的产品基础版本。VLM 推理、真实视频数据、动作切片和云端媒体存储仍属于后续团队模块，README 不将这些尚未接入的能力标记为已完成。
 
 ## 8. 项目目录
 
@@ -325,7 +347,7 @@ Tiktok-AI/
 │  │  ├─ media-assets/          # 媒体资源元数据骨架
 │  │  ├─ vlm-core/              # Prompt、模型 Provider 和分析契约
 │  │  ├─ video-stage/           # 视频处理和时间轴后端骨架
-│  │  ├─ voice-control/         # 语音识别和意图后端骨架
+│  │  ├─ voice-control/         # 简单语音指令解析 API
 │  │  ├─ users/                 # 注册、登录和 JWT
 │  │  ├─ popular-dances/        # 热门手势舞 API
 │  │  ├─ ai-teaching/           # AI 教学组合 API
@@ -354,6 +376,7 @@ Tiktok-AI/
 | GET | `/api/popular-dances` | 获取热门舞蹈列表 |
 | GET | `/api/ai-teaching/workspace` | 获取教学工作区状态 |
 | GET | `/api/drafts` | 获取草稿存储状态 |
+| POST | `/api/voice/commands/interpret` | 解析简单语音指令并返回结构化意图 |
 
 ### 9.1 在 Swagger 中测试登录
 
@@ -444,55 +467,7 @@ npm run build
 npm run start
 ```
 
-## 12. 常见问题
-
-### PostgreSQL `ECONNREFUSED`
-
-```powershell
-docker version
-docker ps
-docker start flight-system-postgres
-```
-
-检查 5434 端口：
-
-```powershell
-Get-NetTCPConnection -LocalPort 5434 -ErrorAction SilentlyContinue
-```
-
-### 3000 或 3001 端口被占用
-
-```powershell
-Get-NetTCPConnection -LocalPort 3000,3001 -ErrorAction SilentlyContinue |
-  Select-Object LocalPort,OwningProcess
-```
-
-确认进程属于本项目后再关闭，不要直接结束不认识的系统进程。
-
-### 前端无法连接后端
-
-确认：
-
-- `http://localhost:3001/api/health` 可以访问。
-- `FRONTEND_ORIGIN=http://localhost:3000`。
-- `NEXT_PUBLIC_API_BASE_URL` 没有写错。
-- 修改 `.env` 后已经重启对应服务。
-
-### Swagger 页面打不开
-
-```powershell
-Invoke-WebRequest http://localhost:3001/api/docs -UseBasicParsing
-Invoke-WebRequest http://localhost:3001/api/openapi.json -UseBasicParsing
-```
-
-### 摄像头或麦克风打不开
-
-- 使用最新版 Chrome 或 Edge。
-- 允许 `localhost:3000` 使用摄像头和麦克风。
-- 检查设备是否被其他应用独占。
-- 网页不能绕过浏览器权限自动开启摄像头或麦克风。
-
-## 13. 安全说明
+## 12. 安全说明
 
 - 禁止提交 `.env`、`.env.local`、JWT Secret 和大模型 API Key。
 - 数据库只保存密码哈希，不保存明文密码。

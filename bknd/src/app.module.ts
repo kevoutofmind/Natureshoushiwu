@@ -9,6 +9,7 @@ import { DraftsModule } from './drafts/drafts.module';
 import { MediaAssetsModule } from './media-assets';
 import { PopularDancesModule } from './popular-dances/popular-dances.module';
 import { UsersModule } from './users/users.module';
+import { VoiceControlModule } from './voice-control';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module';
     PopularDancesModule,
     AiTeachingModule,
     DraftsModule,
+    VoiceControlModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -55,6 +63,7 @@ export class UsersController {
   @ApiNotFoundResponse({ description: '电子邮箱尚未注册。' })
   @ApiUnauthorizedResponse({ description: '密码错误。' })
   @Post('login')
+  @HttpCode(200)
   login(@Body() dto: LoginDto) {
     return this.usersService.login(dto);
   }

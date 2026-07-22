@@ -21,7 +21,13 @@ import {
   Typography,
 } from '@mui/material';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearSession, readSession, type AuthSession } from '@/lib/auth';
+import {
+  clearSession,
+  readSession,
+  saveSession,
+  type AuthSession,
+  validateSession,
+} from '@/lib/auth';
 import { workspaceTheme } from '@/theme/workspace-theme';
 
 const navigation = [
@@ -49,17 +55,40 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    let active = true;
+
+    const verifyStoredSession = async () => {
       const storedSession = readSession();
       if (!storedSession) {
         router.replace('/login');
         return;
       }
-      setSession(storedSession);
-      setChecked(true);
-    }, 0);
 
-    return () => window.clearTimeout(timer);
+      try {
+        const verifiedSession = await validateSession(storedSession);
+        if (!active) return;
+
+        if (!verifiedSession) {
+          clearSession();
+          router.replace('/login');
+          return;
+        }
+
+        saveSession(verifiedSession);
+        setSession(verifiedSession);
+      } catch {
+        if (!active) return;
+        clearSession();
+        router.replace('/login');
+      } finally {
+        if (active) setChecked(true);
+      }
+    };
+
+    void verifyStoredSession();
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   const currentTab =

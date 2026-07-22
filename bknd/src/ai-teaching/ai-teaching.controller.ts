@@ -31,7 +31,7 @@ export class AiTeachingController {
           capabilities: {
             cameraRecording: true,
             localDrafts: true,
-            voiceControl: false,
+            voiceControl: true,
             vlmCoaching: false,
           },
         },

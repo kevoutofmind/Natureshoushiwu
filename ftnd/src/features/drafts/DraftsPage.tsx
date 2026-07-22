@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import VideoLibraryRoundedIcon from '@mui/icons-material/VideoLibraryRounded';
@@ -20,11 +20,28 @@ import { deleteDraft, listDrafts } from './draft-store';
 import type { DanceDraft } from './types';
 
 function DraftVideo({ draft }: { draft: DanceDraft }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   const url = useMemo(() => URL.createObjectURL(draft.video), [draft.video]);
 
-  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  useEffect(
+    () => () => {
+      videoRef.current?.pause();
+      videoRef.current?.removeAttribute('src');
+      videoRef.current?.load();
+      URL.revokeObjectURL(url);
+    },
+    [url],
+  );
 
-  return <video src={url} controls playsInline preload="metadata" />;
+  return (
+    <video
+      ref={videoRef}
+      src={url}
+      controls
+      playsInline
+      preload="none"
+    />
+  );
 }
 
 export default function DraftsPage() {

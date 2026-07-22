@@ -1,6 +1,5 @@
-export { VIDEO_STAGE_API_BASE_PATH } from './api';
-export type {
-  ActionTimelineSegment,
-  VideoStagePlaybackState,
-  VideoStageSource,
-} from './types';
+export {
+  dispatchTeachingStageCommand,
+  VIDEO_STAGE_COMMAND_EVENT,
+} from './contracts/teaching-stage-command';
+export type { TeachingStageCommand } from './contracts/teaching-stage-command';

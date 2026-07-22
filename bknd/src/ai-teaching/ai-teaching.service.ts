@@ -16,7 +16,7 @@ export class AiTeachingService {
         capabilities: {
           cameraRecording: true,
           localDrafts: true,
-          voiceControl: false,
+          voiceControl: true,
           vlmCoaching: false,
         },
       },
