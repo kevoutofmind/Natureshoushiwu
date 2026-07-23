@@ -51,6 +51,7 @@ const navigation = [
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const roadshowMode = process.env.NEXT_PUBLIC_ROADSHOW_MODE === 'true';
   const [session, setSession] = useState<AuthSession | null>(null);
   const [checked, setChecked] = useState(false);
 
@@ -58,6 +59,19 @@ export default function AppShell({ children }: { children: ReactNode }) {
     let active = true;
 
     const verifyStoredSession = async () => {
+      if (roadshowMode) {
+        setSession({
+          accessToken: 'roadshow-local-session',
+          user: {
+            id: 'roadshow-user',
+            email: 'demo@move-match.local',
+            createdAt: new Date(0).toISOString(),
+          },
+        });
+        setChecked(true);
+        return;
+      }
+
       const storedSession = readSession();
       if (!storedSession) {
         router.replace('/login');
@@ -89,7 +103,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [router]);
+  }, [roadshowMode, router]);
 
   const currentTab =
     navigation.find((item) => pathname.startsWith(item.path))?.path ??

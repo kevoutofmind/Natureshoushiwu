@@ -19,12 +19,18 @@ export function createVlmProvider(
 
   return new OpenAiCompatibleVlmProvider({
     apiUrl: environment.VLM_API_URL ?? '',
-    apiKey: environment.VLM_API_KEY ?? '',
+    apiKey: environment.VLM_API_KEY ?? environment.KIMI_API_KEY ?? '',
     model: environment.VLM_MODEL ?? '',
     timeoutMs: positiveInteger(environment.VLM_TIMEOUT_MS, 4000),
     maximumRetries: nonNegativeInteger(environment.VLM_MAX_RETRIES, 1),
     temperature: boundedNumber(environment.VLM_TEMPERATURE, 0.1, 0, 1),
     jsonMode: environment.VLM_JSON_MODE !== 'false',
+    thinkingMode:
+      environment.VLM_THINKING_MODE === 'enabled' ||
+      environment.VLM_THINKING_MODE === 'disabled'
+        ? environment.VLM_THINKING_MODE
+        : undefined,
+    omitTemperature: environment.VLM_OMIT_TEMPERATURE === 'true',
   });
 }
 

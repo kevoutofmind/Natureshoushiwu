@@ -49,6 +49,7 @@ export interface TeachingAgentStartInput {
 export type TeachingVoiceCommand =
   | 'PAUSE'
   | 'RESUME'
+  | 'READY'
   | 'PREVIOUS_ACTION'
   | 'REPEAT_ACTION'
   | 'NEXT_ACTION'

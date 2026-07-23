@@ -5,12 +5,16 @@ import {
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
   const frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000';
+  const bodyLimit = process.env.REQUEST_BODY_LIMIT ?? '32mb';
 
+  app.use(json({ limit: bodyLimit }));
+  app.use(urlencoded({ extended: true, limit: bodyLimit }));
   app.enableCors({ origin: frontendOrigin });
   app.useGlobalPipes(
     new ValidationPipe({

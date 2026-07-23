@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:roadshow": "node scripts/start-roadshow.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

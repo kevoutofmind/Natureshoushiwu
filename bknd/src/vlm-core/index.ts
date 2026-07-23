@@ -1,5 +1,11 @@
 export { VlmCoreModule } from './vlm-core.module';
 export { VlmCoreService } from './vlm-core.service';
+export { ReferenceDatasetService } from './datasets/reference-dataset.service';
+export type {
+  ReferenceDanceDataset,
+  ReferenceDatasetRegistrationResult,
+  ReferenceDatasetSummary,
+} from './contracts/reference-dataset.types';
 export { TeachingAgentService } from './agent/teaching-agent.service';
 export { LessonPlanRegistry } from './agent/lesson-plan.registry';
 export { PromptCatalogService } from './prompts/prompt-catalog.service';

@@ -7,12 +7,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { InterpretVoiceCommandDto } from './dto/interpret-voice-command.dto';
+import { KimiVoiceCommandRouterService } from './kimi-voice-command-router.service';
 import { VoiceControlService } from './voice-control.service';
 
 @ApiTags('语音控制')
 @Controller('api/voice/commands')
 export class VoiceControlController {
-  constructor(private readonly voiceControlService: VoiceControlService) {}
+  constructor(
+    private readonly voiceControlService: VoiceControlService,
+    private readonly kimiRouter: KimiVoiceCommandRouterService,
+  ) {}
 
   @ApiOperation({
     summary: '解析基础语音指令',
@@ -74,7 +78,15 @@ export class VoiceControlController {
   })
   @Post('interpret')
   @HttpCode(200)
-  interpret(@Body() dto: InterpretVoiceCommandDto) {
-    return this.voiceControlService.interpret(dto.transcript);
+  async interpret(@Body() dto: InterpretVoiceCommandDto) {
+    const localResult = this.voiceControlService.interpret(dto.transcript);
+    if (localResult.data.accepted) return localResult;
+
+    return (
+      (await this.kimiRouter.interpret(
+        dto.transcript,
+        localResult.data.command.normalizedTranscript,
+      )) ?? localResult
+    );
   }
 }

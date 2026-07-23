@@ -6,3 +6,5 @@
 **/.env.local
 *.log
 .runtime-logs/
+# Local dance source videos used for MediaPipe extraction.
+data/dances/*/references/*.mp4

@@ -27,6 +27,8 @@ interface OpenAiCompatibleProviderOptions {
   maximumRetries: number;
   temperature: number;
   jsonMode: boolean;
+  thinkingMode?: 'enabled' | 'disabled';
+  omitTemperature: boolean;
 }
 
 interface CompatibleResponse {
@@ -79,12 +81,13 @@ export class OpenAiCompatibleVlmProvider implements VlmProvider {
 
     const body: Record<string, unknown> = {
       model: this.options.model,
-      temperature: this.options.temperature,
       messages: [
         { role: 'system', content: VLM_SYSTEM_PROMPT },
         { role: 'user', content },
       ],
     };
+
+    this.applyProviderOptions(body, this.options.temperature);
 
     if (this.options.jsonMode) {
       body.response_format = { type: 'json_object' };
@@ -107,13 +110,13 @@ export class OpenAiCompatibleVlmProvider implements VlmProvider {
 
     const body: Record<string, unknown> = {
       model: this.options.model,
-      temperature: prompt.modelPolicy.temperature,
       max_tokens: prompt.modelPolicy.maxOutputTokens,
       messages: [
         { role: 'system', content: prompt.system },
         { role: 'user', content: prompt.user },
       ],
     };
+    this.applyProviderOptions(body, prompt.modelPolicy.temperature);
     if (this.options.jsonMode) {
       body.response_format = { type: 'json_object' };
     }
@@ -183,6 +186,16 @@ export class OpenAiCompatibleVlmProvider implements VlmProvider {
     throw lastError instanceof Error
       ? lastError
       : new Error('Unknown VLM provider failure.');
+  }
+
+  private applyProviderOptions(
+    body: Record<string, unknown>,
+    temperature: number,
+  ): void {
+    if (!this.options.omitTemperature) body.temperature = temperature;
+    if (this.options.thinkingMode) {
+      body.thinking = { type: this.options.thinkingMode };
+    }
   }
 
   private extractText(

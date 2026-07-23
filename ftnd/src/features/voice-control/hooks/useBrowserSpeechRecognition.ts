@@ -1,6 +1,12 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type MutableRefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 interface BrowserSpeechRecognitionAlternative {
   transcript: string;
@@ -56,11 +62,11 @@ interface UseBrowserSpeechRecognitionOptions {
 }
 
 const speechErrorMessages: Record<string, string> = {
-  'not-allowed': '麦克风权限被拒绝，请在浏览器中允许麦克风访问。',
-  'service-not-allowed': '浏览器不允许使用语音识别服务。',
-  'audio-capture': '没有检测到可用的麦克风。',
-  network: '语音识别网络服务暂时不可用。',
-  'language-not-supported': '当前浏览器不支持中文语音识别。',
+  "not-allowed": "麦克风权限被拒绝，请在浏览器中允许麦克风访问。",
+  "service-not-allowed": "浏览器不允许使用语音识别服务。",
+  "audio-capture": "没有检测到可用的麦克风。",
+  network: "语音识别网络服务暂时不可用。",
+  "language-not-supported": "当前浏览器不支持中文语音识别。",
 };
 
 export function useBrowserSpeechRecognition({
@@ -70,10 +76,11 @@ export function useBrowserSpeechRecognition({
   const keepListeningRef = useRef(false);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onFinalTranscriptRef = useRef(onFinalTranscript);
+  const lastDispatchedRef = useRef({ transcript: "", at: 0 });
   const [isSupported, setIsSupported] = useState(true);
   const [isListening, setIsListening] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const [error, setError] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     onFinalTranscriptRef.current = onFinalTranscript;
@@ -89,22 +96,26 @@ export function useBrowserSpeechRecognition({
     }
 
     const recognition = new RecognitionConstructor();
-    recognition.lang = 'zh-CN';
+    recognition.lang = "zh-CN";
     recognition.continuous = true;
     recognition.interimResults = true;
 
     recognition.onstart = () => {
       setIsListening(true);
-      setError('');
+      setError("");
     };
 
     recognition.onresult = (event) => {
-      let interim = '';
+      let interim = "";
       const finalParts: string[] = [];
 
-      for (let index = event.resultIndex; index < event.results.length; index++) {
+      for (
+        let index = event.resultIndex;
+        index < event.results.length;
+        index++
+      ) {
         const result = event.results[index];
-        const transcript = result[0]?.transcript.trim() ?? '';
+        const transcript = result[0]?.transcript.trim() ?? "";
         if (!transcript) continue;
 
         if (result.isFinal) {
@@ -115,20 +126,30 @@ export function useBrowserSpeechRecognition({
       }
 
       setInterimTranscript(interim);
-      const finalTranscript = finalParts.join('，');
+      if (isUrgentInterimCommand(interim)) {
+        dispatchRecognizedTranscript(
+          interim,
+          lastDispatchedRef,
+          onFinalTranscriptRef,
+        );
+      }
+      const finalTranscript = finalParts.join("，");
       if (finalTranscript) {
-        setInterimTranscript('');
-        void onFinalTranscriptRef.current(finalTranscript);
+        setInterimTranscript("");
+        dispatchRecognizedTranscript(
+          finalTranscript,
+          lastDispatchedRef,
+          onFinalTranscriptRef,
+        );
       }
     };
 
     recognition.onerror = (event) => {
-      if (event.error === 'aborted' || event.error === 'no-speech') return;
+      if (event.error === "aborted" || event.error === "no-speech") return;
       keepListeningRef.current = false;
       setIsListening(false);
       setError(
-        speechErrorMessages[event.error] ??
-          `语音识别发生错误：${event.error}`,
+        speechErrorMessages[event.error] ?? `语音识别发生错误：${event.error}`,
       );
     };
 
@@ -141,7 +162,7 @@ export function useBrowserSpeechRecognition({
           recognition.start();
         } catch {
           keepListeningRef.current = false;
-          setError('语音识别无法继续，请重新点击开始监听。');
+          setError("语音识别无法继续，请重新点击开始监听。");
         }
       }, 250);
     };
@@ -158,18 +179,18 @@ export function useBrowserSpeechRecognition({
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current) {
-      setError('当前浏览器不支持语音识别，请使用最新版 Chrome 或 Edge。');
+      setError("当前浏览器不支持语音识别，请使用最新版 Chrome 或 Edge。");
       return;
     }
 
     keepListeningRef.current = true;
-    setError('');
+    setError("");
     try {
       recognitionRef.current.start();
     } catch {
       if (!isListening) {
         keepListeningRef.current = false;
-        setError('语音识别启动失败，请稍后重试。');
+        setError("语音识别启动失败，请稍后重试。");
       }
     }
   }, [isListening]);
@@ -179,7 +200,7 @@ export function useBrowserSpeechRecognition({
     if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
     recognitionRef.current?.stop();
     setIsListening(false);
-    setInterimTranscript('');
+    setInterimTranscript("");
   }, []);
 
   return {
@@ -190,4 +211,29 @@ export function useBrowserSpeechRecognition({
     startListening,
     stopListening,
   };
+}
+
+function isUrgentInterimCommand(transcript: string): boolean {
+  const normalized = transcript.replace(/[，。！？!?\s]/g, "");
+  return /^(暂停|停一下|先停一下|继续|继续播放|接着来|我准备好了|直接开始练习)$/.test(
+    normalized,
+  );
+}
+
+function dispatchRecognizedTranscript(
+  transcript: string,
+  lastDispatchedRef: MutableRefObject<{ transcript: string; at: number }>,
+  callbackRef: MutableRefObject<(transcript: string) => void | Promise<void>>,
+) {
+  const normalized = transcript.replace(/[，。！？!?\s]/g, "");
+  const previous = lastDispatchedRef.current;
+  const now = Date.now();
+  const isLikelyDuplicate =
+    now - previous.at < 2500 &&
+    (normalized.includes(previous.transcript) ||
+      previous.transcript.includes(normalized));
+  if (isLikelyDuplicate) return;
+
+  lastDispatchedRef.current = { transcript: normalized, at: now };
+  void callbackRef.current(transcript);
 }

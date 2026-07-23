@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useCallback, useState } from 'react';
-import MicRoundedIcon from '@mui/icons-material/MicRounded';
-import SendRoundedIcon from '@mui/icons-material/SendRounded';
-import StopCircleRoundedIcon from '@mui/icons-material/StopCircleRounded';
+import { useCallback, useState } from "react";
+import MicRoundedIcon from "@mui/icons-material/MicRounded";
+import SendRoundedIcon from "@mui/icons-material/SendRounded";
+import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import {
   Alert,
   Box,
@@ -19,21 +19,27 @@ import {
   Stack,
   TextField,
   Typography,
-} from '@mui/material';
-import { interpretVoiceCommand } from '../api';
-import { useBrowserSpeechRecognition } from '../hooks/useBrowserSpeechRecognition';
-import type { VoiceCommandResult } from '../types';
+} from "@mui/material";
+import { interpretVoiceCommand } from "../api";
+import { useBrowserSpeechRecognition } from "../hooks/useBrowserSpeechRecognition";
+import type { VoiceCommandResult } from "../types";
 
 const supportedCommandExamples = [
-  '暂停',
-  '继续播放',
-  '慢一点',
-  '快一点',
-  '调到 0.5 倍',
-  '倒回 5 秒',
-  '重新播放',
-  '开始录制',
-  '停止录制',
+  "暂停",
+  "继续播放",
+  "我准备好了，直接开始练习",
+  "刚才没看清，再教我一次",
+  "倒退到上个动作",
+  "这个动作重新做一遍",
+  "下一个动作",
+  "从头开始教学",
+  "慢一点",
+  "快一点",
+  "调到 0.5 倍",
+  "倒回 5 秒",
+  "重新播放",
+  "开始录制",
+  "停止录制",
 ];
 
 interface VoiceControlPanelProps {
@@ -45,10 +51,10 @@ export default function VoiceControlPanel({
 }: VoiceControlPanelProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [manualTranscript, setManualTranscript] = useState('');
-  const [lastTranscript, setLastTranscript] = useState('');
+  const [manualTranscript, setManualTranscript] = useState("");
+  const [lastTranscript, setLastTranscript] = useState("");
   const [lastResult, setLastResult] = useState<VoiceCommandResult | null>(null);
-  const [requestError, setRequestError] = useState('');
+  const [requestError, setRequestError] = useState("");
 
   const processTranscript = useCallback(
     async (transcript: string) => {
@@ -57,7 +63,7 @@ export default function VoiceControlPanel({
 
       setLastTranscript(trimmedTranscript);
       setProcessing(true);
-      setRequestError('');
+      setRequestError("");
 
       try {
         const response = await interpretVoiceCommand(trimmedTranscript);
@@ -67,7 +73,7 @@ export default function VoiceControlPanel({
         setRequestError(
           reason instanceof Error
             ? reason.message
-            : '语音指令解析服务暂时不可用。',
+            : "语音指令解析服务暂时不可用。",
         );
       } finally {
         setProcessing(false);
@@ -99,18 +105,20 @@ export default function VoiceControlPanel({
 
   const submitManualTranscript = () => {
     void processTranscript(manualTranscript);
-    setManualTranscript('');
+    setManualTranscript("");
   };
 
   return (
     <>
       <Button
-        variant="outlined"
+        fullWidth
+        variant="contained"
+        color="secondary"
         startIcon={<MicRoundedIcon />}
         onClick={openVoicePanel}
         className="voice-input-button"
       >
-        {isListening ? '正在监听' : '语音输入'}
+        {isListening ? "正在持续监听" : "开启语音控制"}
       </Button>
 
       <Dialog
@@ -132,13 +140,9 @@ export default function VoiceControlPanel({
             </Typography>
             <Chip
               size="small"
-              color={isListening ? 'primary' : 'default'}
+              color={isListening ? "primary" : "default"}
               label={
-                processing
-                  ? '解析中'
-                  : isListening
-                    ? '持续监听'
-                    : '已停止'
+                processing ? "解析中" : isListening ? "持续监听" : "已停止"
               }
             />
           </Stack>
@@ -148,7 +152,8 @@ export default function VoiceControlPanel({
           <Stack gap={2}>
             {!isSupported && (
               <Alert severity="warning">
-                当前浏览器不支持语音识别，请使用最新版 Chrome 或 Edge，或使用下方文字测试。
+                当前浏览器不支持语音识别，请使用最新版 Chrome 或
+                Edge，或使用下方文字测试。
               </Alert>
             )}
 
@@ -159,20 +164,20 @@ export default function VoiceControlPanel({
             <Box
               sx={{
                 minHeight: 76,
-                border: '1px solid',
-                borderColor: 'divider',
+                border: "1px solid",
+                borderColor: "divider",
                 borderRadius: 2,
                 px: 2,
                 py: 1.5,
               }}
             >
               <Typography variant="caption" color="text.secondary">
-                {isListening ? '请说出指令' : '识别文本'}
+                {isListening ? "请说出指令" : "识别文本"}
               </Typography>
               <Typography mt={0.5} fontWeight={750}>
                 {interimTranscript ||
                   lastTranscript ||
-                  '例如：暂停、倒回五秒、调到零点五倍'}
+                  "例如：暂停、倒回五秒、调到零点五倍"}
               </Typography>
             </Box>
 
@@ -184,7 +189,7 @@ export default function VoiceControlPanel({
             )}
 
             {lastResult && !processing && (
-              <Alert severity={lastResult.accepted ? 'success' : 'info'}>
+              <Alert severity={lastResult.accepted ? "success" : "info"}>
                 <Typography fontWeight={850}>
                   {lastResult.responseText}
                 </Typography>
@@ -193,7 +198,7 @@ export default function VoiceControlPanel({
 
             <Divider />
 
-            <Stack direction={{ xs: 'column', sm: 'row' }} gap={1}>
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1}>
               <TextField
                 fullWidth
                 size="small"
@@ -202,7 +207,7 @@ export default function VoiceControlPanel({
                 value={manualTranscript}
                 onChange={(event) => setManualTranscript(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') submitManualTranscript();
+                  if (event.key === "Enter") submitManualTranscript();
                 }}
                 inputProps={{ maxLength: 200 }}
               />
@@ -255,13 +260,10 @@ export default function VoiceControlPanel({
       <Snackbar
         open={Boolean(requestError)}
         autoHideDuration={3600}
-        onClose={() => setRequestError('')}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        onClose={() => setRequestError("")}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert
-          severity="error"
-          onClose={() => setRequestError('')}
-        >
+        <Alert severity="error" onClose={() => setRequestError("")}>
           {requestError}
         </Alert>
       </Snackbar>

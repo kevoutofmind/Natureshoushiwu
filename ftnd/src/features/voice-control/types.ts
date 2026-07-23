@@ -8,12 +8,17 @@ export type VoiceControlStatus =
 export type SimpleVoiceCommandIntent =
   | 'PAUSE'
   | 'RESUME'
+  | 'READY'
   | 'SLOW_DOWN'
   | 'SPEED_UP'
   | 'SET_PLAYBACK_RATE'
   | 'REWIND'
   | 'FAST_FORWARD'
   | 'RESTART'
+  | 'PREVIOUS_ACTION'
+  | 'REPEAT_ACTION'
+  | 'NEXT_ACTION'
+  | 'RESTART_LESSON'
   | 'START_RECORDING'
   | 'STOP_RECORDING';
 

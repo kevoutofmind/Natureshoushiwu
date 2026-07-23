@@ -16,6 +16,7 @@ import { ComparisonInputValidator } from './validation/comparison-input.validato
 import { RealtimeJudgeValidator } from './validation/realtime-judge.validator';
 import { VlmCoreController } from './vlm-core.controller';
 import { VlmCoreService } from './vlm-core.service';
+import { ReferenceDatasetService } from './datasets/reference-dataset.service';
 
 @Module({
   controllers: [VlmCoreController, TeachingAgentController],
@@ -37,6 +38,7 @@ import { VlmCoreService } from './vlm-core.service';
     },
     VlmCoreService,
     TeachingAgentService,
+    ReferenceDatasetService,
   ],
   exports: [
     VlmCoreService,
@@ -48,6 +50,7 @@ import { VlmCoreService } from './vlm-core.service';
     PromptCatalogService,
     ManagedPromptExecutorService,
     VLM_PROVIDER,
+    ReferenceDatasetService,
   ],
 })
 export class VlmCoreModule {}

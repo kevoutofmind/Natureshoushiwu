@@ -251,4 +251,39 @@ describe('TeachingAgentService', () => {
     expect(state.phase).toBe('PREVIEW');
     expect(state.version).toBe(1);
   });
+
+  it('lets the learner skip preview and decide when practice starts', () => {
+    const { agent } = setup(['motion-001']);
+    agent.startSession({
+      schemaVersion: 'teaching-agent-start-v1',
+      sessionId: 'agent-session-learner-control',
+      danceId: 'dance-001',
+    });
+
+    const skippedPreview = agent.handleEvent({
+      schemaVersion: 'teaching-agent-event-v1',
+      sessionId: 'agent-session-learner-control',
+      eventId: 'learner-ready-for-demo',
+      type: 'VOICE_COMMAND',
+      command: 'READY',
+      expectedVersion: 0,
+    });
+    expect(skippedPreview.session.phase).toBe('MOTION_DEMO');
+    expect(skippedPreview.commands.map((command) => command.tool)).toContain(
+      'PLAY_MOTION_DEMO',
+    );
+
+    const startedPractice = agent.handleEvent({
+      schemaVersion: 'teaching-agent-event-v1',
+      sessionId: 'agent-session-learner-control',
+      eventId: 'learner-ready-to-practice',
+      type: 'VOICE_COMMAND',
+      command: 'READY',
+      expectedVersion: 1,
+    });
+    expect(startedPractice.session.phase).toBe('PRACTICE');
+    expect(startedPractice.commands.map((command) => command.tool)).toContain(
+      'START_REALTIME_EVALUATION',
+    );
+  });
 });

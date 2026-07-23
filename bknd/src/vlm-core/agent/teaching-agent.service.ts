@@ -69,7 +69,7 @@ export class TeachingAgentService {
 
     const commands = [
       this.tools.command(session.sessionId, 'SPEAK', {
-        speech: `先完整看一遍《${plan.title}》，然后我会带你逐步学习。`,
+        speech: `你好，我是今天陪你练习的舞蹈老师。我们可以先一起感受一遍《${plan.title}》的节奏；如果你已经熟悉，也可以随时说“我准备好了”，直接开始拆动作。`,
       }),
       this.tools.command(
         session.sessionId,
@@ -209,6 +209,10 @@ export class TeachingAgentService {
   private enterPractice(session: TeachingAgentSession): TeachingAgentCommand[] {
     session.phase = 'PRACTICE';
     return [
+      this.tools.command(session.sessionId, 'SPEAK', {
+        speech:
+          '好，现在轮到你。不要着急，我会等你把动作做完整，再给你一个最关键的建议。',
+      }),
       this.tools.command(session.sessionId, 'START_REALTIME_EVALUATION', {
         danceId: session.danceId,
         motionId: session.currentMotionId,
@@ -266,7 +270,9 @@ export class TeachingAgentService {
       finalScore: result.scores.overall,
     });
     const feedback =
-      outcome === 'PASSED' ? result.speech : `可以，${result.speech}`;
+      outcome === 'PASSED'
+        ? `很好，就是这个感觉。${result.speech}`
+        : `已经很接近了，而且整体方向是对的。${result.speech}`;
     return this.advanceToNextStep(session, plan, feedback);
   }
 
@@ -288,7 +294,7 @@ export class TeachingAgentService {
           motionId: session.currentMotionId,
         }),
         this.tools.command(session.sessionId, 'SPEAK', {
-          speech: result.speech,
+          speech: `没关系，这个动作本来就需要一点时间。${result.speech} 我们放慢再看一次。`,
         }),
         this.motionDemoCommand(session, plan, motion, 0.55),
       ];
@@ -321,7 +327,7 @@ export class TeachingAgentService {
       ...this.advanceToNextStep(
         session,
         plan,
-        '先记住刚才的关键点，我们继续学习下一个动作，稍后再回来巩固。',
+        '这一遍先不追求完美。记住刚才那个关键点，我们继续往下学，最后连起来时再自然地带回来。',
         false,
       ),
     ];
@@ -403,6 +409,32 @@ export class TeachingAgentService {
         session.phase = session.resumePhase;
         session.resumePhase = undefined;
         return this.resumeCommands(session);
+      case 'READY':
+        if (session.phase === 'PREVIEW') {
+          return [
+            this.tools.command(session.sessionId, 'PAUSE_PLAYBACK'),
+            this.tools.command(session.sessionId, 'SPEAK', {
+              speech: '好，我们按你的节奏来，直接拆第一个动作。',
+            }),
+            ...this.enterMotionDemo(session, plan),
+          ];
+        }
+        if (session.phase === 'MOTION_DEMO') {
+          return [
+            this.tools.command(session.sessionId, 'PAUSE_PLAYBACK'),
+            ...this.enterPractice(session),
+          ];
+        }
+        if (session.phase === 'PAUSED' && session.resumePhase) {
+          session.phase = session.resumePhase;
+          session.resumePhase = undefined;
+          return this.resumeCommands(session);
+        }
+        return [
+          this.tools.command(session.sessionId, 'SPEAK', {
+            speech: '我在看着，你准备好就自然地做出来，不用抢拍。',
+          }),
+        ];
       case 'PREVIOUS_ACTION':
         session.currentMotionIndex = Math.max(
           0,
@@ -430,7 +462,7 @@ export class TeachingAgentService {
         return this.advanceToNextStep(
           session,
           plan,
-          '好的，我们进入下一个动作。',
+          '可以，这个动作我们先放一放，按你的选择进入下一个动作。',
         );
       case 'RESTART_LESSON':
         session.currentMotionIndex = 0;
@@ -466,6 +498,9 @@ export class TeachingAgentService {
     session.phase = 'MOTION_DEMO';
     return [
       this.tools.command(session.sessionId, 'STOP_REALTIME_EVALUATION'),
+      this.tools.command(session.sessionId, 'SPEAK', {
+        speech: '好，我们不赶进度。再看一遍这个动作，你可以只注意手臂的路线。',
+      }),
       this.motionDemoCommand(session, plan, this.currentMotion(session, plan)),
     ];
   }
@@ -510,7 +545,8 @@ export class TeachingAgentService {
     session.phase = 'COMPLETED';
     return [
       this.tools.command(session.sessionId, 'SPEAK', {
-        speech: '恭喜你完成了整支手势舞！',
+        speech:
+          '完成啦。你不是简单地跟完了一遍，而是真的把动作一点点学会了。最后这遍很有进步，给自己鼓个掌！',
       }),
       this.tools.command(
         session.sessionId,

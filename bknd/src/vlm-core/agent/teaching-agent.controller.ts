@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   ManagedPromptExecutionInput,
@@ -15,6 +22,12 @@ import type {
 } from '../contracts/teaching-agent.types';
 import { ManagedPromptExecutorService } from '../prompts/managed-prompt-executor.service';
 import { PromptCatalogService } from '../prompts/prompt-catalog.service';
+import type {
+  ReferenceDanceDataset,
+  ReferenceDatasetRegistrationResult,
+  ReferenceDatasetSummary,
+} from '../contracts/reference-dataset.types';
+import { ReferenceDatasetService } from '../datasets/reference-dataset.service';
 import { TeachingAgentService } from './teaching-agent.service';
 
 @ApiTags('VLM Core Teaching Agent')
@@ -24,7 +37,42 @@ export class TeachingAgentController {
     private readonly agent: TeachingAgentService,
     private readonly promptCatalog: PromptCatalogService,
     private readonly promptExecutor: ManagedPromptExecutorService,
+    private readonly datasets: ReferenceDatasetService,
   ) {}
+
+  @Get('datasets')
+  @ApiOperation({
+    summary: 'List reference datasets loaded for local teaching',
+  })
+  listDatasets(): ReferenceDatasetSummary[] {
+    return this.datasets.list();
+  }
+
+  @Get('datasets/:danceId')
+  @ApiOperation({ summary: 'Read a prepared reference dataset by dance ID' })
+  getDataset(@Param('danceId') danceId: string): ReferenceDanceDataset {
+    const dataset = this.datasets.get(danceId);
+    if (!dataset) {
+      throw new NotFoundException({
+        success: false,
+        code: 'REFERENCE_DATASET_NOT_FOUND',
+        message: `Reference dataset ${danceId} has not been prepared.`,
+      });
+    }
+    return dataset;
+  }
+
+  @Post('datasets/register')
+  @ApiOperation({
+    summary:
+      'Register and persist MediaPipe reference templates and lesson plan',
+  })
+  @ApiBody({ type: Object })
+  registerDataset(
+    @Body() input: ReferenceDanceDataset,
+  ): Promise<ReferenceDatasetRegistrationResult> {
+    return this.datasets.register(input);
+  }
 
   @Get('prompts')
   @ApiOperation({ summary: '查看教学 Agent 使用的 Prompt ID、版本和模型策略' })

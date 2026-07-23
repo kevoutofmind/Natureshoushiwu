@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "reference-video-manifest-v1",
+  "danceId": "dance-001",
+  "title": "手势舞 001",
+  "primaryReferenceId": "ref-01",
+  "references": [
+    { "referenceId": "ref-01", "videoUrl": "/dances/dance-001/references/ref-01.mp4", "mirrored": false },
+    { "referenceId": "ref-02", "videoUrl": "/dances/dance-001/references/ref-02.mp4", "mirrored": false },
+    { "referenceId": "ref-03", "videoUrl": "/dances/dance-001/references/ref-03.mp4", "mirrored": false },
+    { "referenceId": "ref-04", "videoUrl": "/dances/dance-001/references/ref-04.mp4", "mirrored": false },
+    { "referenceId": "ref-05", "videoUrl": "/dances/dance-001/references/ref-05.mp4", "mirrored": false }
+  ],
+  "extraction": {
+    "sampleFps": 6,
+    "targetMotionDurationMs": 3000,
+    "minimumMotionDurationMs": 1800,
+    "maximumMotionDurationMs": 4200
+  }
+}

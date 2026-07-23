@@ -6,6 +6,12 @@ export interface VlmTeachingFeedback {
   shouldAdvance?: boolean;
   shouldPause?: boolean;
   status?: VlmFlowStatus;
+  decision?:
+    | 'ACCEPT'
+    | 'ACCEPT_HINT'
+    | 'RETRY'
+    | 'KEEP_WATCHING'
+    | 'NOT_VISIBLE';
 }
 
 export type VlmReactionKind =
@@ -31,6 +37,7 @@ export function normalizeVlmTeachingFeedback(
 
   const candidate = value as Record<string, unknown>;
   const status = candidate.status;
+  const decision = candidate.decision;
 
   return {
     shouldAdvance: candidate.shouldAdvance === true,
@@ -39,14 +46,23 @@ export function normalizeVlmTeachingFeedback(
       typeof status === 'string' && knownStatuses.has(status)
         ? (status as VlmFlowStatus)
         : undefined,
+    decision:
+      typeof decision === 'string' &&
+      ['ACCEPT', 'ACCEPT_HINT', 'RETRY', 'KEEP_WATCHING', 'NOT_VISIBLE'].includes(
+        decision,
+      )
+        ? (decision as VlmTeachingFeedback['decision'])
+        : undefined,
   };
 }
 
 export function resolveVlmReaction(
   feedback: VlmTeachingFeedback,
 ): VlmReactionKind {
+  if (feedback.decision === 'NOT_VISIBLE') return 'NOT_VISIBLE';
   if (feedback.shouldAdvance) return 'ADVANCE';
   if (feedback.shouldPause) return 'SLOW_REPLAY';
+  if (feedback.decision === 'KEEP_WATCHING') return 'KEEP_WATCHING';
   if (feedback.status === 'KEEP_WATCHING') return 'KEEP_WATCHING';
   if (feedback.status === 'NOT_VISIBLE') return 'NOT_VISIBLE';
   return 'KEEP_WATCHING';
