@@ -39,6 +39,23 @@ describe('SkeletonTemplateMatcherEngine', () => {
     expect(result.shouldPause).toBe(false);
   });
 
+  it('treats complete MediaPipe hand landmarks as visible when their visibility field is zero', () => {
+    const input = createRealtimeJudgeFixture('correct');
+    for (const frame of input.observation.frames) {
+      for (const landmark of [
+        ...(frame.leftHand ?? []),
+        ...(frame.rightHand ?? []),
+      ]) {
+        landmark.visibility = 0;
+      }
+    }
+
+    const result = engine.evaluate(pack, input);
+
+    expect(result.decision).toBe('ACCEPT');
+    expect(result.scores.visibility).toBeGreaterThanOrEqual(0.99);
+  });
+
   it('retries a completed observation that differs strongly from references', () => {
     const result = engine.evaluate(
       pack,

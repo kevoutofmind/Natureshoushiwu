@@ -268,17 +268,47 @@ export class SkeletonTemplateMatcherEngine {
     normalize: (frame: SkeletonFrame) => NormalizedPoint[] | undefined,
     distanceScale: number,
   ): number | undefined {
-    const similarities: number[] = [];
-    for (let index = 0; index < referenceFrames.length; index += 1) {
-      const reference = normalize(referenceFrames[index]);
-      const practice = normalize(practiceFrames[index]);
-      if (!reference || !practice) {
-        continue;
-      }
-      const distance = this.pointSetDistance(reference, practice);
-      similarities.push(Math.exp(-distance / distanceScale));
+    const reference = referenceFrames
+      .map(normalize)
+      .filter((points): points is NormalizedPoint[] => Boolean(points));
+    const practice = practiceFrames
+      .map(normalize)
+      .filter((points): points is NormalizedPoint[] => Boolean(points));
+    if (reference.length === 0 || practice.length === 0) {
+      return undefined;
     }
-    return similarities.length === 0 ? undefined : this.average(similarities);
+
+    // Different people rarely perform the same unit at exactly the same
+    // speed. Dynamic time warping aligns nearby phases while preserving the
+    // ordered motion, avoiding false retries caused only by tempo variation.
+    const rows = reference.length + 1;
+    const columns = practice.length + 1;
+    const costs = Array.from({ length: rows }, () =>
+      Array<number>(columns).fill(Number.POSITIVE_INFINITY),
+    );
+    const lengths = Array.from({ length: rows }, () =>
+      Array<number>(columns).fill(0),
+    );
+    costs[0][0] = 0;
+
+    for (let row = 1; row < rows; row += 1) {
+      for (let column = 1; column < columns; column += 1) {
+        const predecessors = [
+          [costs[row - 1][column], lengths[row - 1][column]],
+          [costs[row][column - 1], lengths[row][column - 1]],
+          [costs[row - 1][column - 1], lengths[row - 1][column - 1]],
+        ].sort((left, right) => left[0] - right[0]);
+        costs[row][column] =
+          predecessors[0][0] +
+          this.pointSetDistance(reference[row - 1], practice[column - 1]);
+        lengths[row][column] = predecessors[0][1] + 1;
+      }
+    }
+
+    const pathLength = lengths[rows - 1][columns - 1];
+    if (pathLength === 0) return undefined;
+    const averageDistance = costs[rows - 1][columns - 1] / pathLength;
+    return Math.exp(-averageDistance / distanceScale);
   }
 
   private trajectorySimilarity(
@@ -397,6 +427,12 @@ export class SkeletonTemplateMatcherEngine {
             : frame.rightHand;
       if (!landmarks || landmarks.length === 0) {
         return 0;
+      }
+      // MediaPipe Hand landmarks expose `visibility: 0` even when the hand was
+      // successfully detected. Unlike Pose, Hand has no meaningful per-point
+      // visibility score; the presence of all 21 landmarks is the signal.
+      if (part !== 'pose') {
+        return landmarks.length >= 21 ? 1 : landmarks.length / 21;
       }
       const visible = landmarks.filter(
         (landmark) =>
