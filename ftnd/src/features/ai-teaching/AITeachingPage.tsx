@@ -1,17 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import CameraswitchRoundedIcon from "@mui/icons-material/CameraswitchRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
 import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
-import GraphicEqRoundedIcon from "@mui/icons-material/GraphicEqRounded";
 import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -54,8 +51,18 @@ function getRecordingMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
-export default function AITeachingPage({ danceId }: { danceId?: string }) {
+export default function AITeachingPage({
+  danceId,
+  selectedDanceId,
+  danceTitle,
+}: {
+  danceId?: string;
+  selectedDanceId?: string;
+  danceTitle?: string;
+}) {
   const activeDanceId = danceId ?? "dance-001";
+  const selectedDanceLabel = danceTitle ?? selectedDanceId ?? activeDanceId;
+  const draftDanceId = selectedDanceId ?? activeDanceId;
   const roadshowMode = process.env.NEXT_PUBLIC_ROADSHOW_MODE === "true";
   const router = useRouter();
   const liveVideoRef = useRef<HTMLVideoElement>(null);
@@ -71,7 +78,6 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     load: loadVision,
     detect,
     state: visionState,
-    error: visionError,
   } = useHolisticLandmarker();
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -99,7 +105,6 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     simulateCorrectMotion,
     sendVoiceCommand,
     runtimeStatus,
-    buildProgress,
     referenceVideoUrl,
     session: teachingSession,
     latestSpeech,
@@ -117,6 +122,10 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   }, [activeDanceId]);
 
   const effectiveReferenceUrl = referenceVideoUrl || referenceUrl;
+  const coachSpeech = latestSpeech.replace(
+    /手势舞\s*001/g,
+    selectedDanceLabel,
+  );
   const motionCount = lessonMotions.length;
   const completedMotionCount = teachingSession?.completedMotions.length ?? 0;
   const currentMotionNumber = teachingSession
@@ -331,6 +340,10 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     }
   };
 
+  const startCameraAndTeaching = async () => {
+    await Promise.all([startCamera(), prepareTeaching()]);
+  };
+
   const startRecording = () => {
     const stream = streamRef.current;
     if (!stream || typeof MediaRecorder === "undefined") {
@@ -392,8 +405,8 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     setError("");
     try {
       await saveDraft({
-        danceId: activeDanceId,
-        title: `手势舞练习 · ${activeDanceId}`,
+        danceId: draftDanceId,
+        title: `${selectedDanceLabel}练习`,
         mimeType: recordedBlob.type || "video/webm",
         video: recordedBlob,
       });
@@ -406,58 +419,6 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
 
   return (
     <Box className="teaching-page">
-      <Stack
-        className="teaching-header"
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        gap={2}
-      >
-        <Typography component="h1" variant="h4" fontWeight={900}>
-          AI 教学
-        </Typography>
-        <Stack direction="row" gap={1}>
-          {danceId && <Chip label={`已选择：${danceId}`} size="small" />}
-          <Chip
-            size="small"
-            label={recordingState === "recording" ? "正在录制" : "本地录制"}
-            color={recordingState === "recording" ? "secondary" : "default"}
-            icon={
-              recordingState === "recording" ? (
-                <FiberManualRecordRoundedIcon />
-              ) : undefined
-            }
-          />
-        </Stack>
-      </Stack>
-
-      {(visionState === "loading" || visionError) && (
-        <Alert
-          severity={visionError ? "error" : "info"}
-          className="teaching-alert"
-        >
-          {visionError || "正在加载本地骨骼模型…"}
-        </Alert>
-      )}
-
-      {runtimeStatus.state !== "idle" && (
-        <Alert
-          severity={runtimeStatus.state === "error" ? "error" : "info"}
-          className="teaching-alert"
-        >
-          {runtimeStatus.message}
-          {buildProgress && runtimeStatus.state === "preparing-dataset"
-            ? `（${buildProgress.completedVideos}/${buildProgress.totalVideos}）`
-            : ""}
-        </Alert>
-      )}
-
-      {error && (
-        <Alert severity="error" className="teaching-alert">
-          {error}
-        </Alert>
-      )}
-
       <Box className="teaching-studio-workspace">
         <Stack className="teaching-side-rail" gap={1.5}>
           <TeachingSidePanel title="教学进度" icon={<TimelineRoundedIcon />}>
@@ -504,46 +465,63 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   ? `已掌握 ${completedMotionCount}/${motionCount} 个动作单元`
                   : "启动教学后，我会先为你整理动作路线。"}
               </Typography>
+              <Box className="teaching-current-motion">
+                <Typography fontWeight={850}>
+                  {currentMotionNumber > 0
+                    ? `当前：动作 ${currentMotionNumber}/${motionCount}`
+                    : "等待开始教学"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mt={0.6}>
+                  {currentInstruction ??
+                    "我会把每个动作控制在约 3 秒，并告诉你这一遍只需要关注什么。"}
+                </Typography>
+                {comparison && (
+                  <Chip
+                    size="small"
+                    sx={{ mt: 1 }}
+                    label={`${comparison.measurements.length} 项骨骼测量`}
+                  />
+                )}
+              </Box>
+              <Stack gap={0.8} mt={0.4}>
+                {teachingSession?.phase === "PREVIEW" && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => void sendVoiceCommand("READY")}
+                  >
+                    我已熟悉，直接拆动作
+                  </Button>
+                )}
+                {teachingSession?.phase === "MOTION_DEMO" && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => void sendVoiceCommand("READY")}
+                  >
+                    我准备好了，开始练
+                  </Button>
+                )}
+                {roadshowMode && teachingSession?.phase === "PRACTICE" && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => void simulateCorrectMotion()}
+                  >
+                    无摄像头：模拟正确动作
+                  </Button>
+                )}
+              </Stack>
             </Stack>
             <VlmProgressFeedback
               actionIndex={actionIndex}
               reaction={vlmReaction}
             />
           </TeachingSidePanel>
-          <TeachingSidePanel title="动作拆解" icon={<AutoAwesomeRoundedIcon />}>
-            <Stack gap={0.8}>
-              <Typography fontWeight={850}>
-                {currentMotionNumber > 0
-                  ? `当前：动作 ${currentMotionNumber}/${motionCount}`
-                  : "等待开始教学"}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {currentInstruction ??
-                  "我会把每个动作控制在约 3 秒，并告诉你这一遍只需要关注什么。"}
-              </Typography>
-            </Stack>
-            {comparison && (
-              <Stack gap={1}>
-                <Chip
-                  size="small"
-                  label={`${comparison.measurements.length} 项骨骼测量`}
-                />
-                <Typography variant="body2">
-                  已生成当前参考帧与跟练帧的结构化对齐结果。
-                </Typography>
-              </Stack>
-            )}
-          </TeachingSidePanel>
         </Stack>
 
         <Box className="studio-layout">
           <Box className="studio-column studio-column-reference">
-            <Box className="studio-panel-header">
-              <Typography variant="h6" fontWeight={850}>
-                原手势舞
-              </Typography>
-            </Box>
-
             <Box className="studio-screen-area studio-screen-area-reference">
               <Box className="phone-stage reference-phone">
                 {effectiveReferenceUrl ? (
@@ -593,16 +571,11 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
           </Box>
 
           <Box className="studio-column studio-column-camera">
-            <Box className="studio-panel-header">
-              <Typography variant="h6" fontWeight={850}>
-                跟练教学
-              </Typography>
-            </Box>
-
             <Box className="studio-screen-area studio-screen-area-camera">
               <Box className="phone-stage camera-stage">
                 {previewUrl ? (
                   <video
+                    className="camera-feed-mirrored"
                     ref={previewVideoRef}
                     src={previewUrl}
                     controls
@@ -611,7 +584,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   />
                 ) : (
                   <>
-                    <video ref={liveVideoRef} muted playsInline />
+                    <video className="camera-feed-mirrored" ref={liveVideoRef} muted playsInline />
                     <SkeletonOverlay snapshot={liveSkeleton} />
                     {recordingState === "idle" && (
                       <Stack className="camera-placeholder" alignItems="center">
@@ -624,6 +597,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                 {recordingState === "recording" && (
                   <Box className="recording-indicator">REC</Box>
                 )}
+                {error && <Box className="stage-error">{error}</Box>}
                 <VlmStageFeedbackOverlay
                   actionIndex={actionIndex}
                   reaction={vlmReaction}
@@ -640,13 +614,25 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
               gap={1.2}
               flexWrap="wrap"
             >
-              {recordingState === "idle" && (
+              {recordingState === "idle" && !teachingSession && (
                 <Button
                   variant="contained"
-                  onClick={startCamera}
+                  onClick={() => void startCameraAndTeaching()}
+                  disabled={runtimeStatus.state === "preparing-dataset"}
                   startIcon={<CameraswitchRoundedIcon />}
                 >
-                  打开摄像头
+                  {runtimeStatus.state === "preparing-dataset"
+                    ? "正在准备教学"
+                    : "相机＋AI 教学"}
+                </Button>
+              )}
+              {recordingState === "idle" && teachingSession && (
+                <Button
+                  variant="contained"
+                  onClick={() => void startCamera()}
+                  startIcon={<CameraswitchRoundedIcon />}
+                >
+                  重新打开摄像头
                 </Button>
               )}
               {recordingState === "camera-ready" && (
@@ -703,39 +689,9 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   导出 JSON
                 </Button>
               )}
-              <Button
-                variant="contained"
-                onClick={() => void prepareTeaching()}
-                disabled={runtimeStatus.state === "preparing-dataset"}
-              >
-                {runtimeStatus.state === "preparing-dataset"
-                  ? "正在准备参考模板"
-                  : "启动 AI 教学"}
-              </Button>
-              {teachingSession?.phase === "PREVIEW" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void sendVoiceCommand("READY")}
-                >
-                  我已熟悉，直接拆动作
-                </Button>
-              )}
-              {teachingSession?.phase === "MOTION_DEMO" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void sendVoiceCommand("READY")}
-                >
-                  我准备好了，开始练
-                </Button>
-              )}
-              {roadshowMode && teachingSession?.phase === "PRACTICE" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void simulateCorrectMotion()}
-                >
-                  无摄像头：模拟正确动作
-                </Button>
-              )}
+              <Box className="studio-voice-control">
+                <VoiceControlPanel onCommandRecognized={handleVoiceResult} />
+              </Box>
             </Stack>
           </Box>
         </Box>
@@ -747,7 +703,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
               reaction={vlmReaction}
             />
             <Typography variant="body2" mt={1}>
-              {latestSpeech ||
+              {coachSpeech ||
                 "你好，我会陪你一步一步来。你随时可以说“慢一点”“再教我一次”或“我准备好了”，学习节奏由你决定。"}
             </Typography>
             {teachingSession && (
@@ -757,14 +713,6 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                 label={`${phaseLabel} · 动作 ${currentMotionNumber}/${motionCount}`}
               />
             )}
-          </TeachingSidePanel>
-          <TeachingSidePanel title="语音控制" icon={<GraphicEqRoundedIcon />}>
-            <Stack gap={1}>
-              <Typography variant="body2" color="text.secondary">
-                点击后会持续监听；没有麦克风时也可以在弹窗中输入文字测试。
-              </Typography>
-              <VoiceControlPanel onCommandRecognized={handleVoiceResult} />
-            </Stack>
           </TeachingSidePanel>
         </Stack>
       </Box>

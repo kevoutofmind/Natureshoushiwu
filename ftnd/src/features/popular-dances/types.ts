@@ -3,6 +3,8 @@ export interface PopularDance {
   title: string;
   creator?: string;
   coverUrl?: string;
+  coverGradient?: string;
+  runtimeDanceId?: string;
   durationSeconds?: number;
   difficulty?: string;
 }
