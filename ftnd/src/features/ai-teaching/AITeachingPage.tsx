@@ -29,7 +29,10 @@ import type {
   SkeletonSnapshot,
   VisionComparisonPayload,
 } from "@/features/video-stage/vision-types";
-import { VoiceControlPanel } from "@/features/voice-control";
+import {
+  type VoiceCommandResult,
+  VoiceControlPanel,
+} from "@/features/voice-control";
 import { getTeachingWorkspace } from "./api";
 import TeachingSidePanel from "./components/TeachingSidePanel";
 import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
@@ -40,6 +43,7 @@ import {
 } from "./components/VlmFeedbackWidgets";
 import { useVlmTeachingFeedback } from "./hooks/useVlmTeachingFeedback";
 import { useTeachingRuntime } from "./hooks/useTeachingRuntime";
+import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
 
@@ -400,6 +404,19 @@ export default function AITeachingPage({
     }
   };
 
+  const startRecordingFromVoice = async () => {
+    if (recorderRef.current?.state === "recording") return;
+    if (!streamRef.current) await startCamera();
+    if (streamRef.current) startRecording();
+  };
+
+  const handlePageVoiceResult = (result: VoiceCommandResult) => {
+    const recordingHandled = executeRecordingVoiceCommand(result, {
+      start: startRecordingFromVoice,
+      stop: stopRecording,
+    });
+    if (!recordingHandled) handleVoiceResult(result);
+  };
   const storeDraft = async () => {
     if (!recordedBlob) return;
     setSaving(true);
@@ -696,7 +713,9 @@ export default function AITeachingPage({
                 </Button>
               )}
               <Box className="studio-voice-control">
-                <VoiceControlPanel onCommandRecognized={handleVoiceResult} />
+                <VoiceControlPanel
+                  onCommandRecognized={handlePageVoiceResult}
+                />
               </Box>
             </Stack>
           </Box>
