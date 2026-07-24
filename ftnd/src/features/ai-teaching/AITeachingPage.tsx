@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import CameraswitchRoundedIcon from "@mui/icons-material/CameraswitchRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
-import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
 import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
@@ -42,6 +41,7 @@ import {
 } from "@/features/voice-control";
 import { getPopularDances } from "@/features/popular-dances/api";
 import { getTeachingWorkspace } from "./api";
+import FloatingAiCoach from "./components/FloatingAiCoach";
 import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
 import {
   getMotionBreakdown,
@@ -49,7 +49,6 @@ import {
 } from "./motion-breakdown-api";
 import TeachingSidePanel from "./components/TeachingSidePanel";
 import {
-  VlmCoachFeedback,
   VlmProgressFeedback,
   VlmStageFeedbackOverlay,
 } from "./components/VlmFeedbackWidgets";
@@ -145,6 +144,7 @@ export default function AITeachingPage({
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [introOpen, setIntroOpen] = useState(true);
   const {
     containerRef: effectCanvasContainerRef,
     getRecordingStream,
@@ -413,6 +413,15 @@ export default function AITeachingPage({
     link.download = `${comparison.sampleId}.json`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const finishLumiIntro = () => {
+    setIntroOpen(false);
+    const referenceVideo = referenceVideoRef.current;
+    if (referenceVideo) {
+      referenceVideo.currentTime = 0;
+      void referenceVideo.play().catch(() => undefined);
+    }
   };
 
   const startCamera = async () => {
@@ -903,25 +912,19 @@ export default function AITeachingPage({
           </Box>
         </Box>
 
-        <Stack className="teaching-side-rail" gap={1.5}>
-          <TeachingSidePanel title="AI 教练" icon={<ForumRoundedIcon />}>
-            <VlmCoachFeedback
-              actionIndex={actionIndex}
-              reaction={vlmReaction}
-            />
-            <Typography variant="body2" mt={1}>
-              {latestSpeech ||
-                "你好，我会陪你一步一步来。你随时可以说“慢一点”“再教我一次”或“我准备好了”，学习节奏由你决定。"}
-            </Typography>
-            {teachingSession && (
-              <Chip
-                size="small"
-                sx={{ mt: 1 }}
-                label={`${phaseLabel} · 动作 ${currentMotionNumber}/${motionCount}`}
-              />
-            )}
-          </TeachingSidePanel>
-        </Stack>
+        <FloatingAiCoach
+          introOpen={introOpen}
+          danceTitle={danceTitle ?? selectedDanceId ?? activeDanceId}
+          motions={lessonMotions}
+          phaseLabel={phaseLabel}
+          speech={
+            currentInstruction ??
+            latestSpeech ??
+            "我会陪你一步一步练，先看清手的位置。"
+          }
+          review={null}
+          onFinishIntro={finishLumiIntro}
+        />
       </Box>
     </Box>
   );
