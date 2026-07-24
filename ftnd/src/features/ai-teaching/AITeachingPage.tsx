@@ -19,7 +19,14 @@ import {
 import { useRouter } from "next/navigation";
 import { saveDraft } from "@/features/drafts/draft-store";
 import { SkeletonOverlay } from "@/features/video-stage/components/SkeletonOverlay";
+import { RecordingEffectsPicker } from "@/features/video-stage/components/RecordingEffectsPicker";
 import { useHolisticLandmarker } from "@/features/video-stage/hooks/useHolisticLandmarker";
+import { useRecordingEffectRenderer } from "@/features/video-stage/hooks/useRecordingEffectRenderer";
+import {
+  DEFAULT_BEAUTY_SETTINGS,
+  type BeautySettings,
+  type RecordingEffectId,
+} from "@/features/video-stage/recording-effects";
 import {
   averageVisibility,
   compareGeometry,
@@ -81,6 +88,10 @@ export default function AITeachingPage({
     state: visionState,
   } = useHolisticLandmarker();
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
+  const [recordingEffect, setRecordingEffect] =
+    useState<RecordingEffectId>("clear");
+  const [beautySettings, setBeautySettings] =
+    useState<BeautySettings>(DEFAULT_BEAUTY_SETTINGS);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
@@ -94,6 +105,15 @@ export default function AITeachingPage({
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const {
+    containerRef: effectCanvasContainerRef,
+    getRecordingStream,
+  } = useRecordingEffectRenderer({
+    sourceVideoRef: liveVideoRef,
+    sourceStreamRef: streamRef,
+    effect: recordingEffect,
+    beauty: beautySettings,
+  });
   const {
     actionIndex,
     applyFeedback,
@@ -346,7 +366,7 @@ export default function AITeachingPage({
   };
 
   const startRecording = () => {
-    const stream = streamRef.current;
+    const stream = getRecordingStream();
     if (!stream || typeof MediaRecorder === "undefined") {
       setError("请先打开摄像头，或更换支持 MediaRecorder 的浏览器。");
       return;
@@ -585,7 +605,17 @@ export default function AITeachingPage({
                   />
                 ) : (
                   <>
-                    <video className="camera-feed-mirrored" ref={liveVideoRef} muted playsInline />
+                    <video
+                      className="camera-feed-mirrored camera-source-video"
+                      ref={liveVideoRef}
+                      muted
+                      playsInline
+                    />
+                    <Box
+                      ref={effectCanvasContainerRef}
+                      className="camera-effect-layer"
+                      aria-hidden="true"
+                    />
                     <SkeletonOverlay snapshot={liveSkeleton} />
                     {recordingState === "idle" && (
                       <Stack className="camera-placeholder" alignItems="center">
@@ -604,6 +634,19 @@ export default function AITeachingPage({
                   <Box className="recording-indicator">REC</Box>
                 )}
                 {error && <Box className="stage-error">{error}</Box>}
+                {!previewUrl && (
+                  <RecordingEffectsPicker
+                    value={recordingEffect}
+                    onChange={setRecordingEffect}
+                    beauty={beautySettings}
+                    onBeautyChange={(key, value) =>
+                      setBeautySettings((current) => ({
+                        ...current,
+                        [key]: value,
+                      }))
+                    }
+                  />
+                )}
                 <VlmStageFeedbackOverlay
                   actionIndex={actionIndex}
                   reaction={vlmReaction}

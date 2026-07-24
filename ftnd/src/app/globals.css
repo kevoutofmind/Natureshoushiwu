@@ -861,9 +861,31 @@ h6 {
   transform: scaleX(-1);
 }
 
+.camera-source-video {
+  visibility: hidden;
+}
+
+.camera-effect-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.camera-effect-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.camera-stage .skeleton-overlay {
+  z-index: 2;
+}
+
 .camera-placeholder {
   position: absolute;
   inset: 0;
+  z-index: 3;
   justify-content: center;
   gap: 12px;
   color: rgba(255, 255, 255, 0.65);
@@ -876,6 +898,7 @@ h6 {
 
 .recording-indicator {
   position: absolute;
+  z-index: 5;
   top: 16px;
   right: 16px;
   padding: 7px 11px;
@@ -886,6 +909,80 @@ h6 {
   font-weight: 950;
   letter-spacing: 0.12em;
   box-shadow: 0 0 22px rgba(254, 44, 85, 0.5);
+}
+
+.recording-effects-picker {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  z-index: 3;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(5, 5, 7, 0.7);
+  backdrop-filter: blur(12px);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.recording-effects-picker svg {
+  color: var(--aqua);
+}
+
+.beauty-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px 10px;
+  margin-top: 5px;
+}
+
+.beauty-control {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.beauty-control input {
+  width: 100%;
+  accent-color: var(--aqua);
+}
+
+.recording-effects-list {
+  display: flex;
+  gap: 7px;
+  margin-top: 6px;
+  overflow-x: auto;
+  padding-bottom: 1px;
+  scrollbar-width: thin;
+}
+
+.recording-effect-option {
+  display: grid;
+  min-width: 39px;
+  gap: 3px;
+  place-items: center;
+  padding: 1px 0;
+  color: rgba(255, 255, 255, 0.76);
+  white-space: nowrap;
+}
+
+.recording-effect-swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.recording-effect-option.is-selected {
+  color: #fff;
+}
+
+.recording-effect-option.is-selected .recording-effect-swatch {
+  border-color: var(--aqua);
+  box-shadow: 0 0 0 2px rgba(37, 244, 238, 0.22);
 }
 
 .stage-error {
