@@ -44,10 +44,12 @@ const supportedCommandExamples = [
 
 interface VoiceControlPanelProps {
   onCommandRecognized?: (result: VoiceCommandResult) => void;
+  fullWidth?: boolean;
 }
 
 export default function VoiceControlPanel({
   onCommandRecognized,
+  fullWidth = true,
 }: VoiceControlPanelProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -111,7 +113,7 @@ export default function VoiceControlPanel({
   return (
     <>
       <Button
-        fullWidth
+        fullWidth={fullWidth}
         variant="contained"
         color="secondary"
         startIcon={<MicRoundedIcon />}

@@ -64,8 +64,8 @@
         "left_hand"
       ],
       "evaluationPolicy": {
-        "acceptThreshold": 0.72,
-        "acceptWithHintThreshold": 0.56,
+        "acceptThreshold": 0.5,
+        "acceptWithHintThreshold": 0.4,
         "minimumCompletionProgress": 0.62,
         "minimumObservationMs": 650
       },
@@ -36444,8 +36444,8 @@
         "left_hand"
       ],
       "evaluationPolicy": {
-        "acceptThreshold": 0.72,
-        "acceptWithHintThreshold": 0.56,
+        "acceptThreshold": 0.5,
+        "acceptWithHintThreshold": 0.4,
         "minimumCompletionProgress": 0.62,
         "minimumObservationMs": 650
       },
@@ -62061,8 +62061,8 @@
         "right_hand"
       ],
       "evaluationPolicy": {
-        "acceptThreshold": 0.72,
-        "acceptWithHintThreshold": 0.56,
+        "acceptThreshold": 0.5,
+        "acceptWithHintThreshold": 0.4,
         "minimumCompletionProgress": 0.62,
         "minimumObservationMs": 650
       },
@@ -105856,8 +105856,8 @@
         "left_hand"
       ],
       "evaluationPolicy": {
-        "acceptThreshold": 0.72,
-        "acceptWithHintThreshold": 0.56,
+        "acceptThreshold": 0.5,
+        "acceptWithHintThreshold": 0.4,
         "minimumCompletionProgress": 0.62,
         "minimumObservationMs": 650
       },

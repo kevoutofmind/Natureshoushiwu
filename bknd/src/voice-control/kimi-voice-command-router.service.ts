@@ -48,7 +48,7 @@ export class KimiVoiceCommandRouterService {
         body: JSON.stringify({
           model: this.model,
           thinking: { type: 'disabled' },
-          max_tokens: 180,
+          max_tokens: 300,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: KIMI_VOICE_ROUTER_SYSTEM_PROMPT },
@@ -102,7 +102,7 @@ export class KimiVoiceCommandRouterService {
     if (playbackRate !== undefined) parameters.playbackRate = playbackRate;
     const responseText =
       typeof data.responseText === 'string' && data.responseText.trim()
-        ? data.responseText.trim().slice(0, 100)
+        ? data.responseText.trim().slice(0, 160)
         : '好的，我明白你的意思了。';
 
     return {
@@ -118,7 +118,10 @@ export class KimiVoiceCommandRouterService {
           confidence,
           parameters,
         },
-        label: '自然语言教学指令',
+        label:
+          intent === 'COACH_QUESTION'
+            ? 'AI 教练答疑'
+            : '自然语言教学指令',
         responseText,
         executionStatus: 'not-dispatched',
       },
