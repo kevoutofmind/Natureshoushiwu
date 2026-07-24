@@ -32,6 +32,7 @@ import type {
 import { VoiceControlPanel } from "@/features/voice-control";
 import { getTeachingWorkspace } from "./api";
 import TeachingSidePanel from "./components/TeachingSidePanel";
+import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
 import {
   VlmCoachFeedback,
   VlmProgressFeedback,
@@ -594,6 +595,11 @@ export default function AITeachingPage({
                     )}
                   </>
                 )}
+                <MotionBreakdownOverlay
+                  motions={lessonMotions}
+                  currentMotionIndex={teachingSession?.currentMotionIndex ?? -1}
+                  completedMotionCount={completedMotionCount}
+                />
                 {recordingState === "recording" && (
                   <Box className="recording-indicator">REC</Box>
                 )}

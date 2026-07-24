@@ -50,6 +50,15 @@ export interface MotionTemplatePack {
   }>;
 }
 
+/**
+ * Semantic teaching text generated from a reference video's key frames.
+ * It remains absent until the VLM has produced a trustworthy description.
+ */
+export interface MotionSemanticBreakdown {
+  label: string;
+  steps: string[];
+}
+
 export interface TeachingLessonPlan {
   schemaVersion: 'teaching-lesson-plan-v1';
   danceId: string;
@@ -65,6 +74,7 @@ export interface TeachingLessonPlan {
   motions: Array<{
     motionId: string;
     instruction: string;
+    semantic?: MotionSemanticBreakdown;
     demoStartMs: number;
     demoEndMs: number;
     demoPlaybackRate: number;

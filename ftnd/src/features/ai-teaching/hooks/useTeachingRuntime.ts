@@ -14,6 +14,7 @@ import {
 } from "@/features/video-stage/reference-template-builder";
 import type {
   DatasetBuildProgress,
+  MotionSemanticBreakdown,
   ReferenceDanceDataset,
 } from "@/features/video-stage/reference-dataset.types";
 import type { SkeletonSnapshot } from "@/features/video-stage/vision-types";
@@ -54,7 +55,11 @@ export function useTeachingRuntime({
   const [session, setSession] = useState<TeachingAgentSession | null>(null);
   const [latestSpeech, setLatestSpeech] = useState("");
   const [lessonMotions, setLessonMotions] = useState<
-    Array<{ motionId: string; instruction: string }>
+    Array<{
+      motionId: string;
+      instruction: string;
+      semantic?: MotionSemanticBreakdown;
+    }>
   >([]);
   const datasetRef = useRef<ReferenceDanceDataset | null>(null);
   const sessionRef = useRef<TeachingAgentSession | null>(null);
@@ -275,9 +280,10 @@ export function useTeachingRuntime({
       }
       datasetRef.current = dataset;
       setLessonMotions(
-        dataset.lesson.motions.map(({ motionId, instruction }) => ({
+        dataset.lesson.motions.map(({ motionId, instruction, semantic }) => ({
           motionId,
           instruction,
+          semantic,
         })),
       );
       const sessionId = `lesson-${danceId}-${Date.now()}`;

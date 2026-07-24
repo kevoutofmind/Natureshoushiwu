@@ -48,6 +48,8 @@ const navigation = [
   },
 ];
 
+const LOCAL_DEMO_ACCESS_TOKEN = 'local-demo-session';
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -75,6 +77,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
       const storedSession = readSession();
       if (!storedSession) {
         router.replace('/login');
+        return;
+      }
+
+      if (storedSession.accessToken === LOCAL_DEMO_ACCESS_TOKEN) {
+        setSession(storedSession);
+        setChecked(true);
         return;
       }
 

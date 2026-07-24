@@ -14,6 +14,11 @@ export type TeachingAgentPhase =
 export interface TeachingMotionPlan {
   motionId: string;
   instruction: string;
+  /** Added after reference-video analysis has produced a verified action label. */
+  semantic?: {
+    label: string;
+    steps: string[];
+  };
   demoStartMs: number;
   demoEndMs: number;
   demoPlaybackRate?: number;
