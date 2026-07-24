@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "curated-motion-breakdown-v1",
+  "danceId": "dance-005",
+  "title": "indo",
+  "sourceVideoUrl": "/dances/dance-005/reference.mp4",
+  "durationMs": 9467,
+  "motions": [
+    {
+      "motionId": "indo-001",
+      "startMs": 0,
+      "endMs": 1300,
+      "label": "右掌横扫左前方",
+      "steps": ["右手五指并拢", "从右向左扫过胸前", "左手停在下方作支点"]
+    },
+    {
+      "motionId": "indo-002",
+      "startMs": 1300,
+      "endMs": 2600,
+      "label": "双手捏指向外拉",
+      "steps": ["拇指和食指捏成小圈", "两手从中间向两侧拉开", "手肘保持低于肩膀"]
+    },
+    {
+      "motionId": "indo-003",
+      "startMs": 2600,
+      "endMs": 3900,
+      "label": "双食指脸旁平举",
+      "steps": ["两根食指同时伸直", "停在两侧脸颊旁", "指尖保持朝上"]
+    },
+    {
+      "motionId": "indo-004",
+      "startMs": 3900,
+      "endMs": 5200,
+      "label": "右拳向镜头点",
+      "steps": ["右手收成轻拳", "拳面向镜头点出", "左手留在身体中线"]
+    },
+    {
+      "motionId": "indo-005",
+      "startMs": 5200,
+      "endMs": 6600,
+      "label": "双食指上举眨眼",
+      "steps": ["双食指竖在脸侧", "向上轻提一拍", "配合单眼眨眼"]
+    },
+    {
+      "motionId": "indo-006",
+      "startMs": 6600,
+      "endMs": 7900,
+      "label": "双手虎口框脸",
+      "steps": ["拇指和食指张开", "在下巴两侧围出框", "脸停在手势中央"]
+    },
+    {
+      "motionId": "indo-007",
+      "startMs": 7900,
+      "endMs": 9467,
+      "label": "双手交叠扣在颈前",
+      "steps": ["两只手交叠", "轻放在锁骨和颈前", "头向一侧轻倾完成收尾"]
+    }
+  ]
+}

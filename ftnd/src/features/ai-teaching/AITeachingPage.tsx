@@ -33,7 +33,13 @@ import {
   VoiceControlPanel,
   type VoiceCommandResult,
 } from "@/features/voice-control";
+import { getPopularDances } from "@/features/popular-dances/api";
 import { getTeachingWorkspace } from "./api";
+import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
+import {
+  getMotionBreakdown,
+  type CuratedMotionBreakdown,
+} from "./motion-breakdown-api";
 import TeachingSidePanel from "./components/TeachingSidePanel";
 import {
   VlmCoachFeedback,
@@ -54,7 +60,15 @@ function getRecordingMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
-export default function AITeachingPage({ danceId }: { danceId?: string }) {
+export default function AITeachingPage({
+  danceId,
+  selectedDanceId,
+  danceTitle,
+}: {
+  danceId?: string;
+  selectedDanceId?: string;
+  danceTitle?: string;
+}) {
   const activeDanceId = danceId ?? "dance-001";
   const roadshowMode = process.env.NEXT_PUBLIC_ROADSHOW_MODE === "true";
   const router = useRouter();
@@ -77,6 +91,10 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
+  const [selectedReferenceUrl, setSelectedReferenceUrl] = useState("");
+  const [motionBreakdown, setMotionBreakdown] =
+    useState<CuratedMotionBreakdown | null>(null);
+  const [referencePlaybackTimeMs, setReferencePlaybackTimeMs] = useState(0);
   const [liveSkeleton, setLiveSkeleton] = useState<SkeletonSnapshot | null>(
     null,
   );
@@ -117,7 +135,39 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     );
   }, [activeDanceId]);
 
-  const effectiveReferenceUrl = referenceVideoUrl || referenceUrl;
+  useEffect(() => {
+    let active = true;
+    getPopularDances()
+      .then((response) => {
+        const selectedDance = response.data.items.find(
+          (item) => (item.runtimeDanceId ?? item.id) === activeDanceId,
+        );
+        if (active) setSelectedReferenceUrl(selectedDance?.coverUrl ?? "");
+      })
+      .catch(() => {
+        if (active) setSelectedReferenceUrl("");
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeDanceId]);
+
+  useEffect(() => {
+    let active = true;
+    getMotionBreakdown(activeDanceId)
+      .then((breakdown) => {
+        if (active) setMotionBreakdown(breakdown);
+      })
+      .catch(() => {
+        if (active) setMotionBreakdown(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeDanceId]);
+
+  const effectiveReferenceUrl =
+    referenceUrl || referenceVideoUrl || selectedReferenceUrl;
   const motionCount = lessonMotions.length;
   const completedMotionCount = teachingSession?.completedMotions.length ?? 0;
   const currentMotionNumber = teachingSession
@@ -448,7 +498,12 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
           AI 教学
         </Typography>
         <Stack direction="row" gap={1}>
-          {danceId && <Chip label={`已选择：${danceId}`} size="small" />}
+          {(danceTitle || selectedDanceId || danceId) && (
+            <Chip
+              label={`已选择：${danceTitle ?? selectedDanceId ?? danceId}`}
+              size="small"
+            />
+          )}
           <Chip
             size="small"
             label={recordingState === "recording" ? "正在录制" : "本地录制"}
@@ -591,6 +646,16 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                       controls
                       playsInline
                       preload="metadata"
+                      onLoadedMetadata={(event) =>
+                        setReferencePlaybackTimeMs(
+                          Math.round(event.currentTarget.currentTime * 1000),
+                        )
+                      }
+                      onTimeUpdate={(event) =>
+                        setReferencePlaybackTimeMs(
+                          Math.round(event.currentTarget.currentTime * 1000),
+                        )
+                      }
                     />
                     <SkeletonOverlay
                       snapshot={referenceSkeleton}
@@ -665,6 +730,12 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                 )}
                 {recordingState === "recording" && (
                   <Box className="recording-indicator">REC</Box>
+                )}
+                {motionBreakdown && (
+                  <MotionBreakdownOverlay
+                    motions={motionBreakdown.motions}
+                    currentTimeMs={referencePlaybackTimeMs}
+                  />
                 )}
                 <VlmStageFeedbackOverlay
                   actionIndex={actionIndex}
