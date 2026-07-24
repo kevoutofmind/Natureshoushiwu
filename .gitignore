@@ -5,6 +5,10 @@
 **/.env
 **/.env.local
 *.log
+*.pid
 .runtime-logs/
 # Local dance source videos used for MediaPipe extraction.
 data/dances/*/references/*.mp4
+# Generated video transcodes and project-local FFmpeg binaries.
+bknd/data/.transcoded-h264/
+tools/ffmpeg/
