@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import CameraswitchRoundedIcon from "@mui/icons-material/CameraswitchRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
-import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
 import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
@@ -38,10 +37,10 @@ import type {
 } from "@/features/video-stage/vision-types";
 import { VoiceControlPanel } from "@/features/voice-control";
 import { getTeachingWorkspace } from "./api";
+import FloatingAiCoach from "./components/FloatingAiCoach";
 import TeachingSidePanel from "./components/TeachingSidePanel";
 import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
 import {
-  VlmCoachFeedback,
   VlmProgressFeedback,
   VlmStageFeedbackOverlay,
 } from "./components/VlmFeedbackWidgets";
@@ -107,9 +106,9 @@ export default function AITeachingPage({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const previewUrlRef = useRef<string | null>(null);
-  const referenceUrlRef = useRef<string | null>(null);
   const animationRef = useRef<number | null>(null);
   const fullFrameStreakRef = useRef(0);
+  const preparationStartedRef = useRef(false);
   const {
     load: loadVision,
     detect,
@@ -122,7 +121,6 @@ export default function AITeachingPage({
     useState<BeautySettings>(DEFAULT_BEAUTY_SETTINGS);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
-  const [referenceUrl, setReferenceUrl] = useState("");
   const [liveSkeleton, setLiveSkeleton] = useState<SkeletonSnapshot | null>(
     null,
   );
@@ -133,6 +131,7 @@ export default function AITeachingPage({
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [introOpen, setIntroOpen] = useState(true);
   const {
     containerRef: effectCanvasContainerRef,
     getRecordingStream,
@@ -162,6 +161,11 @@ export default function AITeachingPage({
     session: teachingSession,
     latestSpeech,
     lessonMotions,
+    challengeStage,
+    slowPracticeReview,
+    replayWeakMotion,
+    startFullSpeedChallenge,
+    speak,
   } = useTeachingRuntime({
     danceId: activeDanceId,
     referenceVideoRef,
@@ -169,12 +173,21 @@ export default function AITeachingPage({
   });
 
   useEffect(() => {
+    if (preparationStartedRef.current) return;
+    preparationStartedRef.current = true;
+    speak(
+      `欢迎来到手势舞教学，接下来我会全程陪伴你学习《${selectedDanceLabel}》。`,
+    );
+    void prepareTeaching();
+  }, [prepareTeaching, selectedDanceLabel, speak]);
+
+  useEffect(() => {
     getTeachingWorkspace(activeDanceId).catch((reason: unknown) =>
       setError(reason instanceof Error ? reason.message : "工作台加载失败。"),
     );
   }, [activeDanceId]);
 
-  const effectiveReferenceUrl = referenceVideoUrl || referenceUrl;
+  const effectiveReferenceUrl = referenceVideoUrl;
   const coachSpeech = latestSpeech.replace(
     /手势舞\s*001/g,
     selectedDanceLabel,
@@ -195,14 +208,44 @@ export default function AITeachingPage({
         : 0;
   const phaseLabel = teachingSession
     ? {
-        PREVIEW: "熟悉整舞",
-        MOTION_DEMO: "老师示范",
-        PRACTICE: "轮到你练",
-        FULL_CHALLENGE: "连贯挑战",
-        PAUSED: "稍作休息",
-        COMPLETED: "本次完成",
+        PREVIEW: "整舞预览",
+        MOTION_DEMO: "分步学习",
+        PRACTICE: "分步学习",
+        FULL_CHALLENGE:
+          challengeStage === "fast" ? "原速挑战" : "慢速连贯",
+        PAUSED: "分步学习 · 暂停",
+        COMPLETED: "课程完成",
       }[teachingSession.phase]
-    : "尚未开始";
+    : "整舞预览";
+  const coachPhaseIndex =
+    challengeStage === "fast" || challengeStage === "complete"
+      ? 3
+      : ["slow", "review", "targeted-replay"].includes(challengeStage)
+        ? 2
+        : teachingSession &&
+            ["MOTION_DEMO", "PRACTICE", "PAUSED"].includes(
+              teachingSession.phase,
+            )
+          ? 1
+          : 0;
+  const coachMessage =
+    challengeStage === "slow"
+      ? "这一遍不中断，跟住音乐做完；结束后我只说一个最值得改的点。"
+      : challengeStage === "targeted-replay"
+        ? "正在以 0.5 倍速度重看关键动作，先盯住刚才提示的细节。"
+        : challengeStage === "fast"
+          ? "原速挑战中，跟住音乐完成整支舞。"
+          : challengeStage === "complete"
+            ? "做得好，四个阶段已经全部完成。今天的动作已经真正连起来了。"
+            : currentInstruction ||
+              coachSpeech ||
+              runtimeStatus.message;
+  const showRealtimeFeedback =
+    challengeStage === "idle" &&
+    Boolean(
+      teachingSession &&
+        ["MOTION_DEMO", "PRACTICE"].includes(teachingSession.phase),
+    );
 
   useEffect(
     () => () => {
@@ -212,12 +255,6 @@ export default function AITeachingPage({
         previewVideoRef.current?.removeAttribute("src");
         previewVideoRef.current?.load();
         URL.revokeObjectURL(previewUrlRef.current);
-      }
-      if (referenceUrlRef.current) {
-        referenceVideoRef.current?.pause();
-        referenceVideoRef.current?.removeAttribute("src");
-        referenceVideoRef.current?.load();
-        URL.revokeObjectURL(referenceUrlRef.current);
       }
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     },
@@ -274,22 +311,6 @@ export default function AITeachingPage({
     recordingState,
     visionState,
   ]);
-
-  const selectReference = (file?: File) => {
-    if (!file) return;
-    if (referenceUrlRef.current) {
-      referenceVideoRef.current?.pause();
-      referenceVideoRef.current?.removeAttribute("src");
-      referenceVideoRef.current?.load();
-      URL.revokeObjectURL(referenceUrlRef.current);
-    }
-
-    const url = URL.createObjectURL(file);
-    referenceUrlRef.current = url;
-    setReferenceUrl(url);
-    setReferenceSkeleton(null);
-    setComparison(null);
-  };
 
   const canvasFrame = (video: HTMLVideoElement, mirrored: boolean) => {
     const canvas = document.createElement("canvas");
@@ -408,8 +429,11 @@ export default function AITeachingPage({
     }
   };
 
-  const startCameraAndTeaching = async () => {
-    await Promise.all([startCamera(), prepareTeaching()]);
+  const finishCoachIntro = () => {
+    setIntroOpen(false);
+    speak("准备好了，我们先跟着示范找到节奏。");
+    void referenceVideoRef.current?.play().catch(() => undefined);
+    if (recordingState === "idle") void startCamera();
   };
 
   const startRecording = () => {
@@ -492,40 +516,21 @@ export default function AITeachingPage({
           <TeachingSidePanel title="教学进度" icon={<TimelineRoundedIcon />}>
             <Stack gap={1.2}>
               <Typography variant="body2" color="text.secondary">
-                今天不赶进度，我们按“熟悉—拆解—连贯”三步把动作真正学会。
+                今天按“预览—分步—慢速—原速”四步完成整支舞，预计 5
+                分钟内完成。
               </Typography>
               <Stack direction="row" gap={0.6} flexWrap="wrap">
-                <Chip
-                  size="small"
-                  label="① 熟悉整舞"
-                  color={
-                    teachingSession?.phase === "PREVIEW" ? "primary" : "default"
-                  }
-                />
-                <Chip
-                  size="small"
-                  label="② 拆解分段"
-                  color={
-                    teachingSession &&
-                    ["MOTION_DEMO", "PRACTICE", "PAUSED"].includes(
-                      teachingSession.phase,
-                    )
-                      ? "primary"
-                      : "default"
-                  }
-                />
-                <Chip
-                  size="small"
-                  label="③ 连贯练习"
-                  color={
-                    teachingSession &&
-                    ["FULL_CHALLENGE", "COMPLETED"].includes(
-                      teachingSession.phase,
-                    )
-                      ? "primary"
-                      : "default"
-                  }
-                />
+                {["整舞预览", "分步学习", "慢速连贯", "原速挑战"].map(
+                  (label, index) => (
+                    <Chip
+                      key={label}
+                      size="small"
+                      label={`${index + 1}. ${label}`}
+                      color={coachPhaseIndex === index ? "primary" : "default"}
+                      variant={coachPhaseIndex >= index ? "filled" : "outlined"}
+                    />
+                  ),
+                )}
               </Stack>
               <LinearProgress variant="determinate" value={lessonProgress} />
               <Typography variant="body2" fontWeight={800}>
@@ -612,30 +617,16 @@ export default function AITeachingPage({
                     <Typography fontWeight={800}>等待原视频</Typography>
                   </>
                 )}
-                <VlmStageFeedbackOverlay
-                  actionIndex={actionIndex}
-                  reaction={vlmReaction}
-                  stage="reference"
-                />
+                {showRealtimeFeedback && (
+                  <VlmStageFeedbackOverlay
+                    actionIndex={actionIndex}
+                    reaction={vlmReaction}
+                    stage="reference"
+                  />
+                )}
               </Box>
             </Box>
 
-            <Stack
-              className="studio-actions"
-              direction="row"
-              justifyContent="center"
-              alignItems="center"
-            >
-              <Button component="label" variant="outlined">
-                导入参考视频
-                <input
-                  hidden
-                  type="file"
-                  accept="video/*"
-                  onChange={(event) => selectReference(event.target.files?.[0])}
-                />
-              </Button>
-            </Stack>
           </Box>
 
           <Box className="studio-column studio-column-camera">
@@ -694,125 +685,137 @@ export default function AITeachingPage({
                     }
                   />
                 )}
-                <VlmStageFeedbackOverlay
-                  actionIndex={actionIndex}
-                  reaction={vlmReaction}
-                  stage="camera"
-                />
+                {showRealtimeFeedback && (
+                  <VlmStageFeedbackOverlay
+                    actionIndex={actionIndex}
+                    reaction={vlmReaction}
+                    stage="camera"
+                  />
+                )}
               </Box>
             </Box>
 
-            <Stack
-              className="studio-actions"
-              direction="row"
-              justifyContent="center"
-              alignItems="center"
-              gap={1.2}
-              flexWrap="wrap"
-            >
-              {recordingState === "idle" && !teachingSession && (
-                <Button
-                  variant="contained"
-                  onClick={() => void startCameraAndTeaching()}
-                  disabled={runtimeStatus.state === "preparing-dataset"}
-                  startIcon={<CameraswitchRoundedIcon />}
-                >
-                  {runtimeStatus.state === "preparing-dataset"
-                    ? "正在准备教学"
-                    : "相机＋AI 教学"}
-                </Button>
-              )}
-              {recordingState === "idle" && teachingSession && (
-                <Button
-                  variant="contained"
-                  onClick={() => void startCamera()}
-                  startIcon={<CameraswitchRoundedIcon />}
-                >
-                  重新打开摄像头
-                </Button>
-              )}
-              {recordingState === "camera-ready" && (
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  onClick={startRecording}
-                  disabled={rendererState === "loading"}
-                  startIcon={<FiberManualRecordRoundedIcon />}
-                >
-                  开始录制
-                </Button>
-              )}
-              {recordingState === "recording" && (
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  onClick={stopRecording}
-                  startIcon={<StopCircleRoundedIcon />}
-                >
-                  停止录制
-                </Button>
-              )}
-              {recordingState === "recorded" && (
-                <>
-                  <Button
-                    variant="contained"
-                    onClick={storeDraft}
-                    disabled={saving}
-                    startIcon={<SaveRoundedIcon />}
-                  >
-                    {saving ? "保存中…" : "保存到草稿箱"}
-                  </Button>
-                  <Button variant="outlined" onClick={startCamera}>
-                    重新录制
-                  </Button>
-                </>
-              )}
-              {!roadshowMode && (
-                <Button
-                  variant="outlined"
-                  onClick={captureComparison}
-                  disabled={
-                    !effectiveReferenceUrl ||
-                    visionState !== "ready" ||
-                    recordingState === "idle" ||
-                    Boolean(previewUrl)
-                  }
-                >
-                  开发调试：冻结当前对齐帧
-                </Button>
-              )}
-              {comparison && (
-                <Button variant="outlined" onClick={downloadComparison}>
-                  导出 JSON
-                </Button>
-              )}
-              <Box className="studio-voice-control">
-                <VoiceControlPanel onCommandRecognized={handleVoiceResult} />
-              </Box>
-            </Stack>
           </Box>
         </Box>
 
-        <Stack className="teaching-side-rail" gap={1.5}>
-          <TeachingSidePanel title="AI 教练" icon={<ForumRoundedIcon />}>
-            <VlmCoachFeedback
-              actionIndex={actionIndex}
-              reaction={vlmReaction}
-            />
-            <Typography variant="body2" mt={1}>
-              {coachSpeech ||
-                "你好，我会陪你一步一步来。你随时可以说“慢一点”“再教我一次”或“我准备好了”，学习节奏由你决定。"}
-            </Typography>
-            {teachingSession && (
-              <Chip
+        <Box className="studio-control-dock" aria-label="教学控制">
+          {recordingState === "idle" && (
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => void startCamera()}
+              startIcon={<CameraswitchRoundedIcon />}
+            >
+              打开摄像头
+            </Button>
+          )}
+          {recordingState === "camera-ready" && (
+            <Button
+              size="small"
+              variant="contained"
+              color="secondary"
+              onClick={startRecording}
+              disabled={rendererState === "loading"}
+              startIcon={<FiberManualRecordRoundedIcon />}
+            >
+              开始录制
+            </Button>
+          )}
+          {recordingState === "recording" && (
+            <Button
+              size="small"
+              variant="contained"
+              color="secondary"
+              onClick={stopRecording}
+              startIcon={<StopCircleRoundedIcon />}
+            >
+              停止录制
+            </Button>
+          )}
+          {recordingState === "recorded" && (
+            <>
+              <Button
                 size="small"
-                sx={{ mt: 1 }}
-                label={`${phaseLabel} · 动作 ${currentMotionNumber}/${motionCount}`}
-              />
-            )}
-          </TeachingSidePanel>
-        </Stack>
+                variant="contained"
+                onClick={storeDraft}
+                disabled={saving}
+                startIcon={<SaveRoundedIcon />}
+              >
+                {saving ? "保存中…" : "保存到草稿箱"}
+              </Button>
+              <Button size="small" variant="outlined" onClick={startCamera}>
+                重新录制
+              </Button>
+            </>
+          )}
+          <Box className="studio-voice-control">
+            <VoiceControlPanel onCommandRecognized={handleVoiceResult} />
+          </Box>
+          {!roadshowMode && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={captureComparison}
+              disabled={
+                !effectiveReferenceUrl ||
+                visionState !== "ready" ||
+                recordingState === "idle" ||
+                Boolean(previewUrl)
+              }
+            >
+              开发调试：对齐当前帧
+            </Button>
+          )}
+          {comparison && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={downloadComparison}
+            >
+              导出 JSON
+            </Button>
+          )}
+        </Box>
       </Box>
+      <FloatingAiCoach
+        introOpen={introOpen}
+        danceTitle={selectedDanceLabel}
+        motions={lessonMotions}
+        phaseLabel={phaseLabel}
+        speech={coachMessage}
+        review={challengeStage === "review" ? slowPracticeReview : null}
+        onFinishIntro={finishCoachIntro}
+      >
+        {challengeStage === "review" && (
+          <>
+            {slowPracticeReview?.weakMotionIndex != null && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => void replayWeakMotion()}
+              >
+                重看关键动作
+              </Button>
+            )}
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => void startFullSpeedChallenge()}
+            >
+              进入原速挑战
+            </Button>
+          </>
+        )}
+        {challengeStage === "complete" && (
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => void sendVoiceCommand("RESTART_LESSON")}
+          >
+            重新练习
+          </Button>
+        )}
+      </FloatingAiCoach>
     </Box>
   );
 }
