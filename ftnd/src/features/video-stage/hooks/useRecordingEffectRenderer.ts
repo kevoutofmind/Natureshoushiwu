@@ -180,17 +180,21 @@ export function useRecordingEffectRenderer({
   sourceStreamRef,
   effect,
   beauty,
+  enabled,
 }: {
   sourceVideoRef: RefObject<HTMLVideoElement | null>;
   sourceStreamRef: RefObject<MediaStream | null>;
   effect: RecordingEffectId;
   beauty: BeautySettings;
+  enabled: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outputCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const effectRef = useRef(effect);
   const beautyRef = useRef(beauty);
-  const [rendererState, setRendererState] = useState<"loading" | "webgl" | "fallback">("loading");
+  const [rendererState, setRendererState] = useState<
+    "idle" | "loading" | "webgl" | "fallback"
+  >("idle");
 
   useEffect(() => {
     effectRef.current = effect;
@@ -211,6 +215,11 @@ export function useRecordingEffectRenderer({
     let lastFaceDetectionAt = 0;
     const container = containerRef.current;
     if (!container) return;
+    if (!enabled) {
+      container.replaceChildren();
+      outputCanvasRef.current = null;
+      return;
+    }
 
     const fallbackCanvas = document.createElement("canvas");
     fallbackCanvas.className = "camera-effect-canvas";
@@ -336,7 +345,7 @@ export function useRecordingEffectRenderer({
       outputCanvasRef.current = null;
       container.replaceChildren();
     };
-  }, [sourceVideoRef]);
+  }, [enabled, sourceVideoRef]);
 
   const getRecordingStream = useCallback(() => {
     const sourceStream = sourceStreamRef.current;
@@ -347,5 +356,12 @@ export function useRecordingEffectRenderer({
     return output;
   }, [sourceStreamRef]);
 
-  return { containerRef, getRecordingStream, rendererState };
+  const resolvedRendererState =
+    enabled && rendererState === "idle" ? "loading" : rendererState;
+
+  return {
+    containerRef,
+    getRecordingStream,
+    rendererState: resolvedRendererState,
+  };
 }

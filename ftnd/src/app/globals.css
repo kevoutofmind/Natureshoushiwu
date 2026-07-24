@@ -915,14 +915,68 @@ h6 {
   position: absolute;
   right: 10px;
   bottom: 10px;
-  left: 10px;
   z-index: 3;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.recording-effects-picker.is-open {
+  left: 10px;
+}
+
+.recording-effects-toggle {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(37, 244, 238, 0.72);
+  border-radius: 50%;
+  color: #041012;
+  background:
+    radial-gradient(circle at 30% 26%, #ffffff 0 8%, transparent 9%),
+    linear-gradient(135deg, #25f4ee, #89fff7 55%, #ff7296);
+  box-shadow:
+    0 0 0 4px rgba(37, 244, 238, 0.12),
+    0 10px 24px rgba(0, 0, 0, 0.42);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.recording-effects-toggle:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow:
+    0 0 0 6px rgba(37, 244, 238, 0.16),
+    0 13px 28px rgba(0, 0, 0, 0.48);
+}
+
+.recording-effects-toggle > svg:first-child {
+  font-size: 23px;
+}
+
+.recording-effects-chevron {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 17px;
+  height: 17px;
+  padding: 1px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  color: #fff !important;
+  background: #121419;
+  transition: transform 160ms ease;
+}
+
+.recording-effects-picker.is-open .recording-effects-chevron {
+  transform: rotate(180deg);
+}
+
+.recording-effects-panel {
+  margin-bottom: 9px;
   padding: 7px 8px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 12px;
   background: rgba(5, 5, 7, 0.7);
   backdrop-filter: blur(12px);
-  color: rgba(255, 255, 255, 0.9);
 }
 
 .recording-effects-picker svg {

@@ -50,6 +50,33 @@ import { useTeachingRuntime } from "./hooks/useTeachingRuntime";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
 
+const FULL_FRAME_STREAK = 3;
+
+function landmarkConfidence(
+  landmark: SkeletonSnapshot["pose"][number] | undefined,
+) {
+  return landmark?.visibility ?? landmark?.presence ?? 0;
+}
+
+function handConfidence(hand: SkeletonSnapshot["leftHand"]) {
+  if (hand.length < 15) return 0;
+  return hand.reduce(
+    (sum, landmark) => sum + landmarkConfidence(landmark),
+    0,
+  ) / hand.length;
+}
+
+function hasStableFullFrame(snapshot: SkeletonSnapshot) {
+  const upperBody = [11, 12, 13, 14, 15, 16].every(
+    (index) => landmarkConfidence(snapshot.pose[index]) >= 0.35,
+  );
+  return (
+    upperBody &&
+    handConfidence(snapshot.leftHand) >= 0.3 &&
+    handConfidence(snapshot.rightHand) >= 0.3
+  );
+}
+
 function getRecordingMimeType() {
   const candidates = [
     "video/webm;codecs=vp8",
@@ -82,6 +109,7 @@ export default function AITeachingPage({
   const previewUrlRef = useRef<string | null>(null);
   const referenceUrlRef = useRef<string | null>(null);
   const animationRef = useRef<number | null>(null);
+  const fullFrameStreakRef = useRef(0);
   const {
     load: loadVision,
     detect,
@@ -108,15 +136,19 @@ export default function AITeachingPage({
   const {
     containerRef: effectCanvasContainerRef,
     getRecordingStream,
+    rendererState,
   } = useRecordingEffectRenderer({
     sourceVideoRef: liveVideoRef,
     sourceStreamRef: streamRef,
     effect: recordingEffect,
     beauty: beautySettings,
+    enabled:
+      recordingState === "camera-ready" || recordingState === "recording",
   });
   const {
     actionIndex,
     applyFeedback,
+    clearNotVisible,
     reaction: vlmReaction,
   } = useVlmTeachingFeedback();
   const {
@@ -216,6 +248,14 @@ export default function AITeachingPage({
         if (result) {
           setLiveSkeleton(result);
           ingestSkeleton(result);
+          if (hasStableFullFrame(result)) {
+            fullFrameStreakRef.current += 1;
+            if (fullFrameStreakRef.current >= FULL_FRAME_STREAK) {
+              clearNotVisible();
+            }
+          } else {
+            fullFrameStreakRef.current = 0;
+          }
         }
       }
       if (active) animationRef.current = requestAnimationFrame(tick);
@@ -226,7 +266,14 @@ export default function AITeachingPage({
       active = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [detect, ingestSkeleton, previewUrl, recordingState, visionState]);
+  }, [
+    clearNotVisible,
+    detect,
+    ingestSkeleton,
+    previewUrl,
+    recordingState,
+    visionState,
+  ]);
 
   const selectReference = (file?: File) => {
     if (!file) return;
@@ -689,6 +736,7 @@ export default function AITeachingPage({
                   variant="contained"
                   color="secondary"
                   onClick={startRecording}
+                  disabled={rendererState === "loading"}
                   startIcon={<FiberManualRecordRoundedIcon />}
                 >
                   开始录制
