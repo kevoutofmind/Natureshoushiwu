@@ -7,6 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  canDispatchAfterCooldown,
+  extractImmediateVoiceCommand,
+  IMMEDIATE_COMMAND_RESET_DELAY_MS,
+  normalizeVoiceTranscript,
+} from "../immediateVoiceCommands";
 
 interface BrowserSpeechRecognitionAlternative {
   transcript: string;
@@ -75,6 +81,8 @@ export function useBrowserSpeechRecognition({
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const keepListeningRef = useRef(false);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commandResetPendingRef = useRef(false);
+  const commandBlockedUntilRef = useRef(0);
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const lastDispatchedRef = useRef({ transcript: "", at: 0 });
   const [isSupported, setIsSupported] = useState(true);
@@ -106,6 +114,8 @@ export function useBrowserSpeechRecognition({
     };
 
     recognition.onresult = (event) => {
+      if (commandResetPendingRef.current) return;
+
       let interim = "";
       const finalParts: string[] = [];
 
@@ -126,12 +136,26 @@ export function useBrowserSpeechRecognition({
       }
 
       setInterimTranscript(interim);
-      if (isUrgentInterimCommand(interim)) {
-        dispatchRecognizedTranscript(
-          interim,
+      const now = Date.now();
+      const immediateCommand = extractImmediateVoiceCommand(interim);
+      if (
+        immediateCommand &&
+        canDispatchAfterCooldown(now, commandBlockedUntilRef.current)
+      ) {
+        const dispatched = dispatchRecognizedTranscript(
+          immediateCommand,
           lastDispatchedRef,
           onFinalTranscriptRef,
         );
+        if (dispatched) {
+          commandBlockedUntilRef.current =
+            now + IMMEDIATE_COMMAND_RESET_DELAY_MS;
+          commandResetPendingRef.current = true;
+          lastDispatchedRef.current = { transcript: "", at: 0 };
+          setInterimTranscript("");
+          recognition.abort();
+          return;
+        }
       }
       const finalTranscript = finalParts.join("，");
       if (finalTranscript) {
@@ -154,7 +178,9 @@ export function useBrowserSpeechRecognition({
     };
 
     recognition.onend = () => {
-      setIsListening(false);
+      const isCommandReset = commandResetPendingRef.current;
+      commandResetPendingRef.current = false;
+      if (!isCommandReset) setIsListening(false);
       if (!keepListeningRef.current) return;
 
       restartTimerRef.current = setTimeout(() => {
@@ -162,9 +188,10 @@ export function useBrowserSpeechRecognition({
           recognition.start();
         } catch {
           keepListeningRef.current = false;
+          setIsListening(false);
           setError("语音识别无法继续，请重新点击开始监听。");
         }
-      }, 250);
+      }, isCommandReset ? IMMEDIATE_COMMAND_RESET_DELAY_MS : 250);
     };
 
     recognitionRef.current = recognition;
@@ -197,6 +224,9 @@ export function useBrowserSpeechRecognition({
 
   const stopListening = useCallback(() => {
     keepListeningRef.current = false;
+    commandResetPendingRef.current = false;
+    commandBlockedUntilRef.current = 0;
+    lastDispatchedRef.current = { transcript: "", at: 0 };
     if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
     recognitionRef.current?.stop();
     setIsListening(false);
@@ -213,27 +243,21 @@ export function useBrowserSpeechRecognition({
   };
 }
 
-function isUrgentInterimCommand(transcript: string): boolean {
-  const normalized = transcript.replace(/[，。！？!?\s]/g, "");
-  return /^(暂停|停一下|先停一下|继续|继续播放|接着来|我准备好了|直接开始练习)$/.test(
-    normalized,
-  );
-}
-
 function dispatchRecognizedTranscript(
   transcript: string,
   lastDispatchedRef: MutableRefObject<{ transcript: string; at: number }>,
   callbackRef: MutableRefObject<(transcript: string) => void | Promise<void>>,
-) {
-  const normalized = transcript.replace(/[，。！？!?\s]/g, "");
+): boolean {
+  const normalized = normalizeVoiceTranscript(transcript);
   const previous = lastDispatchedRef.current;
   const now = Date.now();
   const isLikelyDuplicate =
     now - previous.at < 2500 &&
     (normalized.includes(previous.transcript) ||
       previous.transcript.includes(normalized));
-  if (isLikelyDuplicate) return;
+  if (isLikelyDuplicate) return false;
 
   lastDispatchedRef.current = { transcript: normalized, at: now };
   void callbackRef.current(transcript);
+  return true;
 }

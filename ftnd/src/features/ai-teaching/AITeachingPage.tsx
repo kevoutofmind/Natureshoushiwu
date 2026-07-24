@@ -30,8 +30,8 @@ import type {
   VisionComparisonPayload,
 } from "@/features/video-stage/vision-types";
 import {
-  VoiceControlPanel,
   type VoiceCommandResult,
+  VoiceControlPanel,
 } from "@/features/voice-control";
 import { getPopularDances } from "@/features/popular-dances/api";
 import { getTeachingWorkspace } from "./api";
@@ -48,6 +48,7 @@ import {
 } from "./components/VlmFeedbackWidgets";
 import { useVlmTeachingFeedback } from "./hooks/useVlmTeachingFeedback";
 import { useTeachingRuntime } from "./hooks/useTeachingRuntime";
+import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
 
@@ -105,7 +106,6 @@ export default function AITeachingPage({
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [coachAnswer, setCoachAnswer] = useState("");
   const {
     actionIndex,
     applyFeedback,
@@ -115,8 +115,6 @@ export default function AITeachingPage({
     prepare: prepareTeaching,
     ingestSkeleton,
     handleVoiceResult,
-    simulateCorrectMotion,
-    sendVoiceCommand,
     runtimeStatus,
     buildProgress,
     referenceVideoUrl,
@@ -442,31 +440,19 @@ export default function AITeachingPage({
     }
   };
 
-  const handleRecognizedVoiceResult = async (result: VoiceCommandResult) => {
-    if (result.accepted) {
-      setCoachAnswer(result.responseText);
-    }
-
-    if (result.command.intent === "START_RECORDING") {
-      if (!streamRef.current) {
-        await startCamera();
-      }
-      if (streamRef.current && recorderRef.current?.state !== "recording") {
-        startRecording();
-      }
-      return;
-    }
-
-    if (result.command.intent === "STOP_RECORDING") {
-      stopRecording();
-      return;
-    }
-
-    if (result.command.intent !== "COACH_QUESTION") {
-      handleVoiceResult(result);
-    }
+  const startRecordingFromVoice = async () => {
+    if (recorderRef.current?.state === "recording") return;
+    if (!streamRef.current) await startCamera();
+    if (streamRef.current) startRecording();
   };
 
+  const handlePageVoiceResult = (result: VoiceCommandResult) => {
+    const recordingHandled = executeRecordingVoiceCommand(result, {
+      start: startRecordingFromVoice,
+      stop: stopRecording,
+    });
+    if (!recordingHandled) handleVoiceResult(result);
+  };
   const storeDraft = async () => {
     if (!recordedBlob) return;
     setSaving(true);
@@ -797,12 +783,6 @@ export default function AITeachingPage({
                   </Button>
                 </>
               )}
-              <VoiceControlPanel
-                fullWidth={false}
-                onCommandRecognized={(result) =>
-                  void handleRecognizedVoiceResult(result)
-                }
-              />
               {!roadshowMode && (
                 <Button
                   variant="outlined"
@@ -822,30 +802,11 @@ export default function AITeachingPage({
                   导出 JSON
                 </Button>
               )}
-              {teachingSession?.phase === "PREVIEW" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void sendVoiceCommand("READY")}
-                >
-                  我已熟悉，直接拆动作
-                </Button>
-              )}
-              {teachingSession?.phase === "MOTION_DEMO" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void sendVoiceCommand("READY")}
-                >
-                  我准备好了，开始练
-                </Button>
-              )}
-              {roadshowMode && teachingSession?.phase === "PRACTICE" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void simulateCorrectMotion()}
-                >
-                  无摄像头：模拟正确动作
-                </Button>
-              )}
+              <Box className="studio-voice-control">
+                <VoiceControlPanel
+                  onCommandRecognized={handlePageVoiceResult}
+                />
+              </Box>
             </Stack>
           </Box>
         </Box>
@@ -857,8 +818,7 @@ export default function AITeachingPage({
               reaction={vlmReaction}
             />
             <Typography variant="body2" mt={1}>
-              {coachAnswer ||
-                latestSpeech ||
+              {latestSpeech ||
                 "你好，我会陪你一步一步来。你随时可以说“慢一点”“再教我一次”或“我准备好了”，学习节奏由你决定。"}
             </Typography>
             {teachingSession && (
