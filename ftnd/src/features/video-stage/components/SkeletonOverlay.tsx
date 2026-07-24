@@ -1,14 +1,170 @@
-'use client';
-import { useEffect, useRef } from 'react';
-import { HolisticLandmarker } from '@mediapipe/tasks-vision';
-import type { SkeletonSnapshot, VisionLandmark } from '../vision-types';
-function draw(ctx: CanvasRenderingContext2D, points: VisionLandmark[], connections: Array<{ start: number; end: number }>, color: string) {
-  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
-  for (const { start, end } of connections) { const a = points[start]; const b = points[end]; if (!a || !b) continue; ctx.beginPath(); ctx.moveTo(a.x * ctx.canvas.width, a.y * ctx.canvas.height); ctx.lineTo(b.x * ctx.canvas.width, b.y * ctx.canvas.height); ctx.stroke(); }
-  for (const p of points) { ctx.beginPath(); ctx.arc(p.x * ctx.canvas.width, p.y * ctx.canvas.height, 2.5, 0, Math.PI * 2); ctx.fill(); }
+"use client";
+
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type RefObject,
+} from "react";
+import { HolisticLandmarker } from "@mediapipe/tasks-vision";
+import type { SkeletonSnapshot, VisionLandmark } from "../vision-types";
+
+interface Projection {
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  height: number;
 }
-export function SkeletonOverlay({ snapshot, mirrored = true }: { snapshot: SkeletonSnapshot | null; mirrored?: boolean }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { const canvas = ref.current; const ctx = canvas?.getContext('2d'); if (!canvas || !ctx) return; ctx.clearRect(0, 0, canvas.width, canvas.height); if (!snapshot) return; ctx.save(); if (mirrored) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); } draw(ctx, snapshot.pose, HolisticLandmarker.POSE_CONNECTIONS, '#25f4ee'); draw(ctx, snapshot.leftHand, HolisticLandmarker.HAND_CONNECTIONS, '#fe2c55'); draw(ctx, snapshot.rightHand, HolisticLandmarker.HAND_CONNECTIONS, '#ffffff'); ctx.restore(); }, [snapshot, mirrored]);
-  return <canvas ref={ref} width={360} height={640} className="skeleton-overlay" aria-label="实时人体骨骼" />;
+
+function coverProjection(
+  canvasWidth: number,
+  canvasHeight: number,
+  videoWidth: number,
+  videoHeight: number,
+): Projection {
+  if (videoWidth <= 0 || videoHeight <= 0) {
+    return { offsetX: 0, offsetY: 0, width: canvasWidth, height: canvasHeight };
+  }
+
+  const scale = Math.max(canvasWidth / videoWidth, canvasHeight / videoHeight);
+  const width = videoWidth * scale;
+  const height = videoHeight * scale;
+  return {
+    offsetX: (canvasWidth - width) / 2,
+    offsetY: (canvasHeight - height) / 2,
+    width,
+    height,
+  };
+}
+
+function draw(
+  context: CanvasRenderingContext2D,
+  points: VisionLandmark[],
+  connections: Array<{ start: number; end: number }>,
+  color: string,
+  projection: Projection,
+) {
+  const project = (point: VisionLandmark) => ({
+    x: projection.offsetX + point.x * projection.width,
+    y: projection.offsetY + point.y * projection.height,
+  });
+
+  context.strokeStyle = color;
+  context.fillStyle = color;
+  context.lineWidth = 2;
+  for (const { start, end } of connections) {
+    const startPoint = points[start];
+    const endPoint = points[end];
+    if (!startPoint || !endPoint) continue;
+    const a = project(startPoint);
+    const b = project(endPoint);
+    context.beginPath();
+    context.moveTo(a.x, a.y);
+    context.lineTo(b.x, b.y);
+    context.stroke();
+  }
+
+  for (const point of points) {
+    const projected = project(point);
+    context.beginPath();
+    context.arc(projected.x, projected.y, 2.5, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+export function SkeletonOverlay({
+  snapshot,
+  videoRef,
+  mirrored = false,
+}: {
+  snapshot: SkeletonSnapshot | null;
+  videoRef: RefObject<HTMLVideoElement | null>;
+  mirrored?: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const snapshotRef = useRef(snapshot);
+
+  const redraw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+    const pixelRatio = window.devicePixelRatio || 1;
+    const targetWidth = Math.round(width * pixelRatio);
+    const targetHeight = Math.round(height * pixelRatio);
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
+
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    const currentSnapshot = snapshotRef.current;
+    if (!currentSnapshot) return;
+
+    const projection = coverProjection(
+      width,
+      height,
+      video?.videoWidth ?? 0,
+      video?.videoHeight ?? 0,
+    );
+    context.save();
+    if (mirrored) {
+      context.translate(width, 0);
+      context.scale(-1, 1);
+    }
+    draw(
+      context,
+      currentSnapshot.pose,
+      HolisticLandmarker.POSE_CONNECTIONS,
+      "#25f4ee",
+      projection,
+    );
+    draw(
+      context,
+      currentSnapshot.leftHand,
+      HolisticLandmarker.HAND_CONNECTIONS,
+      "#fe2c55",
+      projection,
+    );
+    draw(
+      context,
+      currentSnapshot.rightHand,
+      HolisticLandmarker.HAND_CONNECTIONS,
+      "#ffffff",
+      projection,
+    );
+    context.restore();
+  }, [mirrored, videoRef]);
+
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+    redraw();
+  }, [redraw, snapshot]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas) return;
+
+    const observer = new ResizeObserver(redraw);
+    observer.observe(canvas);
+    video?.addEventListener("loadedmetadata", redraw);
+    return () => {
+      observer.disconnect();
+      video?.removeEventListener("loadedmetadata", redraw);
+    };
+  }, [redraw, videoRef]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="skeleton-overlay"
+      aria-label="实时人体骨骼"
+    />
+  );
 }

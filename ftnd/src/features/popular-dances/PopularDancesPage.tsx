@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import PauseCircleOutlineRoundedIcon from '@mui/icons-material/PauseCircleOutlineRounded';
 import PlayCircleOutlineRoundedIcon from '@mui/icons-material/PlayCircleOutlineRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import {
   Alert,
   Box,
   Card,
-  CardActionArea,
   CardContent,
   Chip,
   CircularProgress,
+  IconButton,
   InputAdornment,
   Stack,
   TextField,
@@ -27,6 +28,11 @@ export default function PopularDancesPage() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeFullPreviewId, setActiveFullPreviewId] = useState<string | null>(null);
+  const previewVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const previewPlaybackModes = useRef<
+    Record<string, 'ambient' | 'full' | 'paused' | undefined>
+  >({});
 
   useEffect(() => {
     getPopularDances()
@@ -36,6 +42,18 @@ export default function PopularDancesPage() {
       )
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    items.forEach((dance) => {
+      const video = previewVideoRefs.current[dance.id];
+      if (!video || previewPlaybackModes.current[dance.id] === 'paused') return;
+
+      previewPlaybackModes.current[dance.id] = 'ambient';
+      video.loop = true;
+      video.muted = true;
+      void video.play().catch(() => undefined);
+    });
+  }, [items]);
 
   const filteredItems = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -54,6 +72,54 @@ export default function PopularDancesPage() {
       danceTitle: dance.title,
     });
     router.push(`/teaching?${parameters.toString()}`);
+  };
+
+  const playPreview = (dance: PopularDance) => {
+    const video = previewVideoRefs.current[dance.id];
+    if (!video) return;
+
+    const previousMode = previewPlaybackModes.current[dance.id];
+
+    if (previousMode === 'full' && !video.paused) {
+      video.pause();
+      video.muted = true;
+      previewPlaybackModes.current[dance.id] = 'paused';
+      setActiveFullPreviewId(null);
+      return;
+    }
+
+    previewPlaybackModes.current[dance.id] = 'full';
+    setActiveFullPreviewId(dance.id);
+
+    if (previousMode === 'paused') {
+      video.loop = false;
+      video.muted = false;
+      video.volume = 0.85;
+      void video.play().catch(() =>
+        setError('视频无法播放，请确认浏览器允许播放声音。'),
+      );
+      return;
+    }
+
+    video.loop = false;
+    video.currentTime = 0;
+    video.muted = false;
+    video.volume = 0.85;
+    void video.play().catch(() =>
+      setError('视频无法播放，请确认浏览器允许播放声音。'),
+    );
+  };
+
+  const resetFullPreview = (dance: PopularDance) => {
+    const video = previewVideoRefs.current[dance.id];
+    if (!video) return;
+
+    previewPlaybackModes.current[dance.id] = 'ambient';
+    setActiveFullPreviewId(null);
+    video.currentTime = 0;
+    video.muted = true;
+    video.loop = true;
+    void video.play().catch(() => undefined);
   };
 
   return (
@@ -105,40 +171,69 @@ export default function PopularDancesPage() {
           <Box className="dance-grid">
             {filteredItems.map((dance, index) => (
               <Card key={dance.id} className="dance-card">
-                <CardActionArea
-                  onClick={() => openTeaching(dance)}
-                  aria-label={`学习${dance.title}`}
+                <Box
+                  className="dance-cover"
+                  sx={{ background: dance.coverGradient }}
                 >
-                  <Box
-                    className="dance-cover"
-                    sx={{ background: dance.coverGradient }}
-                  >
-                    <Box className="dance-cover-content">
-                      <Typography className="dance-cover-index">
-                        {String(index + 1).padStart(2, '0')}
-                      </Typography>
-                      <PlayCircleOutlineRoundedIcon />
-                      <Typography fontWeight={950}>{dance.title}</Typography>
-                    </Box>
+                  {dance.coverUrl && (
+                    <video
+                      ref={(node) => {
+                        previewVideoRefs.current[dance.id] = node;
+                      }}
+                      className="dance-cover-video"
+                      src={dance.coverUrl}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onEnded={() => resetFullPreview(dance)}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <Box className="dance-cover-content">
+                    <Typography className="dance-cover-index">
+                      {String(index + 1).padStart(2, '0')}
+                    </Typography>
+                    <IconButton
+                      className="dance-preview-button"
+                      onClick={() => playPreview(dance)}
+                      aria-label={`播放${dance.title}原视频`}
+                    >
+                      {activeFullPreviewId === dance.id ? (
+                        <PauseCircleOutlineRoundedIcon />
+                      ) : (
+                        <PlayCircleOutlineRoundedIcon />
+                      )}
+                    </IconButton>
+                    <Typography fontWeight={950}>{dance.title}</Typography>
                   </Box>
-                  <CardContent>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between">
-                      <Box>
-                        <Typography variant="h6" fontWeight={900}>
-                          {dance.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {dance.creator}
-                        </Typography>
-                      </Box>
-                      <ArrowForwardRoundedIcon color="primary" />
-                    </Stack>
-                    <Stack direction="row" spacing={1} mt={1.5}>
+                </Box>
+                <CardContent>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Box>
+                      <Typography variant="h6" fontWeight={900}>
+                        {dance.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {dance.creator}
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      className="dance-teaching-button"
+                      onClick={() => openTeaching(dance)}
+                      aria-label={`进入${dance.title}的 AI 教学`}
+                    >
+                      <ArrowForwardRoundedIcon />
+                    </IconButton>
+                  </Stack>
+                  <Stack direction="row" spacing={1} mt={1.5}>
+                    {dance.difficulty && (
                       <Chip label={dance.difficulty} size="small" variant="outlined" />
+                    )}
+                    {dance.durationSeconds !== undefined && (
                       <Chip label={`${dance.durationSeconds} 秒`} size="small" variant="outlined" />
-                    </Stack>
-                  </CardContent>
-                </CardActionArea>
+                    )}
+                  </Stack>
+                </CardContent>
               </Card>
             ))}
           </Box>

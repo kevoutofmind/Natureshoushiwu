@@ -225,8 +225,8 @@ function assembleDataset(
       expectedDurationMs: Math.max(500, endMs - startMs),
       requiredParts,
       evaluationPolicy: {
-        acceptThreshold: 0.72,
-        acceptWithHintThreshold: 0.56,
+        acceptThreshold: 0.5,
+        acceptWithHintThreshold: 0.4,
         minimumCompletionProgress: 0.62,
         minimumObservationMs: 650,
       },

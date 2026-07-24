@@ -68,4 +68,39 @@ describe('KimiVoiceCommandRouterService', () => {
     );
     expect(result).toBeNull();
   });
+
+  it('returns actionable coaching for a complex dance question', async () => {
+    process.env.KIMI_API_KEY = 'test-key';
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  intent: 'COACH_QUESTION',
+                  confidence: 0.93,
+                  seconds: null,
+                  playbackRate: null,
+                  responseText:
+                    '先固定肩膀，只练左右手的先后顺序；熟练后再配合节奏。',
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response);
+
+    const result = await new KimiVoiceCommandRouterService().interpret(
+      '为什么我左右手总是配合不好',
+      '为什么我左右手总是配合不好',
+    );
+
+    expect(result?.data).toMatchObject({
+      accepted: true,
+      label: 'AI 教练答疑',
+      command: { intent: 'COACH_QUESTION' },
+    });
+  });
 });

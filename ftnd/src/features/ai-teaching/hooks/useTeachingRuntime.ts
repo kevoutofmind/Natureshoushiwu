@@ -14,7 +14,6 @@ import {
 } from "@/features/video-stage/reference-template-builder";
 import type {
   DatasetBuildProgress,
-  MotionSemanticBreakdown,
   ReferenceDanceDataset,
 } from "@/features/video-stage/reference-dataset.types";
 import {
@@ -31,6 +30,7 @@ import type {
   TeachingRuntimeStatus,
   TeachingVoiceCommand,
 } from "../contracts/teaching-runtime";
+import { executeVideoVoiceCommand } from "../voiceCommandExecution";
 import {
   getReferenceDataset,
   registerReferenceDataset,
@@ -82,11 +82,7 @@ export function useTeachingRuntime({
   const [slowPracticeReview, setSlowPracticeReview] =
     useState<SlowPracticeReview | null>(null);
   const [lessonMotions, setLessonMotions] = useState<
-    Array<{
-      motionId: string;
-      instruction: string;
-      semantic?: MotionSemanticBreakdown;
-    }>
+    Array<{ motionId: string; instruction: string }>
   >([]);
   const datasetRef = useRef<ReferenceDanceDataset | null>(null);
   const sessionRef = useRef<TeachingAgentSession | null>(null);
@@ -360,10 +356,9 @@ export function useTeachingRuntime({
       }
       datasetRef.current = dataset;
       setLessonMotions(
-        dataset.lesson.motions.map(({ motionId, instruction, semantic }) => ({
+        dataset.lesson.motions.map(({ motionId, instruction }) => ({
           motionId,
           instruction,
-          semantic,
         })),
       );
       const sessionId = `lesson-${danceId}-${Date.now()}`;
@@ -422,7 +417,7 @@ export function useTeachingRuntime({
         type: "REALTIME_OBSERVATION",
         sampleId: `sample-${Date.now()}`,
         observation: {
-          mirrored: true,
+          mirrored: false,
           progress: Math.min(1, elapsedMs / durationMs),
           frames: observationFrames,
         },
@@ -508,41 +503,36 @@ export function useTeachingRuntime({
     (result: VoiceCommandResult) => {
       if (!result.accepted || !result.command.intent) return;
       const intent = result.command.intent as string;
-      const video = referenceVideoRef.current;
-      const requestedPlaybackRate = result.command.parameters.playbackRate;
-      if (video && requestedPlaybackRate !== undefined) {
-        video.playbackRate = Math.max(0.25, Math.min(2, requestedPlaybackRate));
+      const directVideoIntents = new Set([
+        "PAUSE",
+        "RESUME",
+        "RESTART",
+        "SLOW_DOWN",
+        "SPEED_UP",
+        "SET_PLAYBACK_RATE",
+      ]);
+      if (directVideoIntents.has(intent)) {
+        void executeVideoVoiceCommand(result, referenceVideoRef.current).catch(
+          (error: unknown) =>
+            setRuntimeStatus({ state: "error", message: errorMessage(error) }),
+        );
+        return;
       }
+
       const mappings: Partial<Record<string, TeachingVoiceCommand>> = {
-        PAUSE: "PAUSE",
-        RESUME: "RESUME",
         READY: "READY",
         REWIND: "PREVIOUS_ACTION",
         PREVIOUS_ACTION: "PREVIOUS_ACTION",
         REPEAT_ACTION: "REPEAT_ACTION",
         FAST_FORWARD: "NEXT_ACTION",
         NEXT_ACTION: "NEXT_ACTION",
-        RESTART: "RESTART_LESSON",
         RESTART_LESSON: "RESTART_LESSON",
       };
       const agentCommand = mappings[intent];
-      if (agentCommand) {
-        void sendVoiceCommand(agentCommand);
-        return;
-      }
-      if (!video) return;
-      if (intent === "SLOW_DOWN") video.playbackRate = 0.5;
-      if (intent === "SPEED_UP") video.playbackRate = 1.25;
-      if (intent === "SET_PLAYBACK_RATE") {
-        video.playbackRate = Math.max(
-          0.25,
-          Math.min(2, result.command.parameters.playbackRate ?? 1),
-        );
-      }
+      if (agentCommand) void sendVoiceCommand(agentCommand);
     },
     [referenceVideoRef, sendVoiceCommand],
   );
-
   const simulateCorrectMotion = useCallback(async () => {
     const currentSession = sessionRef.current;
     const dataset = datasetRef.current;

@@ -19,6 +19,7 @@ export type SimpleVoiceCommandIntent =
   | 'REPEAT_ACTION'
   | 'NEXT_ACTION'
   | 'RESTART_LESSON'
+  | 'COACH_QUESTION'
   | 'START_RECORDING'
   | 'STOP_RECORDING';
 
