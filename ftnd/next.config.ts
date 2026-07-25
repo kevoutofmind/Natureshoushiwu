@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   // This demo is designed to build reliably on hackathon laptops as well as CI.
   // Limiting static page-data workers avoids Windows worker-process failures
   // without changing the browser runtime.

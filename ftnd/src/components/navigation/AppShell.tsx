@@ -71,7 +71,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       const storedSession = readSession();
       if (!storedSession) {
-        router.replace('/login');
+        setSession({
+          accessToken: LOCAL_DEMO_ACCESS_TOKEN,
+          user: {
+            id: 'local-demo-user',
+            email: '体验用户',
+            createdAt: new Date(0).toISOString(),
+          },
+        });
+        setChecked(true);
         return;
       }
 

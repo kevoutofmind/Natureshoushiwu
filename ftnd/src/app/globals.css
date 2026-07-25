@@ -2662,6 +2662,22 @@ h6 {
   animation-delay: var(--motion-delay, 0ms);
 }
 
+.motion-preview-card[role="button"] {
+  cursor: pointer;
+}
+
+.motion-preview-card[role="button"]:focus-visible {
+  outline: 2px solid var(--aqua);
+  outline-offset: 3px;
+}
+
+.motion-preview-card[aria-pressed="true"] {
+  border-color: rgb(37 244 238 / 82%);
+  box-shadow:
+    0 0 0 1px rgb(37 244 238 / 36%),
+    0 16px 36px rgb(37 244 238 / 14%);
+}
+
 .motion-preview-card img,
 .motion-preview-card > span {
   display: block;
@@ -2669,6 +2685,27 @@ h6 {
   aspect-ratio: 9 / 13;
   object-fit: cover;
   background: linear-gradient(145deg, #101117, #050608);
+}
+
+.motion-preview-card .motion-preview-index {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 9px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  aspect-ratio: auto;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 75%);
+  border-radius: 50%;
+  color: #fff;
+  font-family: "Arial Rounded MT Bold", "Segoe UI Rounded", "Nunito", sans-serif;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1;
+  background: rgb(3 7 11 / 68%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 36%);
 }
 
 .motion-preview-card figcaption {
@@ -3262,5 +3299,591 @@ h6 {
     height: 100%;
     max-width: 100%;
     aspect-ratio: 5 / 8;
+  }
+}
+
+.lumi-motion-intro {
+  position: fixed;
+  z-index: 1600;
+  inset: 0;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(circle at 13% 90%, rgb(37 244 238 / 15%), transparent 33%),
+    radial-gradient(circle at 88% 24%, rgb(254 44 85 / 18%), transparent 38%),
+    #020306;
+}
+
+.lumi-motion-greeting {
+  position: fixed;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  color: #fff;
+  font-size: clamp(3.2rem, 8vw, 8rem);
+  font-weight: 850;
+  letter-spacing: -.075em;
+  line-height: .96;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.92);
+  animation: lumi-greeting-arrive 620ms cubic-bezier(.2, .8, .2, 1) 90ms both;
+  transition:
+    top 900ms cubic-bezier(.2, .8, .2, 1),
+    left 900ms cubic-bezier(.2, .8, .2, 1),
+    font-size 900ms cubic-bezier(.2, .8, .2, 1),
+    letter-spacing 900ms ease,
+    transform 900ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.lumi-motion-intro.is-showcase .lumi-motion-greeting,
+.lumi-motion-intro.is-ready .lumi-motion-greeting {
+  top: 36px;
+  left: auto;
+  right: 48px;
+  font-size: clamp(1.1rem, 1.7vw, 1.8rem);
+  letter-spacing: -.04em;
+  transform: none;
+}
+
+.lumi-motion-stage {
+  position: fixed;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  width: min(32vw, 380px);
+  min-width: 245px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 22px;
+  aspect-ratio: 9 / 16;
+  background: #090a0e;
+  box-shadow: 0 30px 90px rgb(0 0 0 / 48%);
+  transform: translate(-50%, -50%);
+  animation: lumi-motion-stage-in 540ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.lumi-motion-stage video,
+.lumi-motion-completed-card video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lumi-motion-stage figcaption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 24px 15px 13px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 850;
+  background: linear-gradient(transparent, rgb(0 0 0 / 88%));
+}
+
+.lumi-motion-left {
+  position: fixed;
+  z-index: 2;
+  top: 50%;
+  left: clamp(16px, 3vw, 52px);
+  width: 144px;
+  margin: 0;
+  transform: translateY(-50%);
+}
+
+.lumi-motion-left .lumi-motion-completed-card {
+  aspect-ratio: 9 / 12;
+  animation: lumi-motion-settle 700ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.lumi-motion-left .lumi-motion-completed-card video {
+  aspect-ratio: 9 / 12;
+}
+
+.lumi-motion-start {
+  position: fixed;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  min-width: 218px;
+  padding: 15px 22px;
+  border: 2px solid rgb(255 255 255 / 82%);
+  border-radius: 999px;
+  color: #061012;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 900;
+  cursor: pointer;
+  background: var(--aqua);
+  box-shadow: -5px 5px 0 var(--pink), 0 0 28px rgb(37 244 238 / 42%);
+  transform: translate(-50%, -50%);
+  animation: lumi-motion-stage-in 500ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.lumi-motion-start:hover {
+  background: #fff;
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+@keyframes lumi-greeting-arrive {
+  from { opacity: 0; transform: translate(-50%, -40%) scale(.92); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes lumi-motion-stage-in {
+  from { opacity: 0; transform: translate(-50%, -46%) scale(.94); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes lumi-motion-settle {
+  from { opacity: 0; transform: translateX(calc(50vw - 260px)) scale(2.4); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@media (max-width: 700px) {
+  .lumi-motion-intro.is-showcase .lumi-motion-greeting,
+  .lumi-motion-intro.is-ready .lumi-motion-greeting {
+    top: 22px;
+    right: 20px;
+  }
+
+  .lumi-motion-left { width: 92px; left: 12px; }
+  .lumi-motion-stage { width: min(58vw, 290px); min-width: 0; }
+}
+
+/* Refined Lumi motion sequence: translucent bubble lettering and a slower settle into the AI-teaching rail. */
+.lumi-motion-intro {
+  --lumi-ai-rail-left: clamp(278px, 17vw, 352px);
+}
+
+.lumi-motion-greeting {
+  font-family: "Arial Rounded MT Bold", "Segoe UI Rounded", "Nunito", sans-serif;
+  font-weight: 900;
+  color: transparent;
+  background: linear-gradient(145deg, #fff 8%, #d8e3e8 31%, #fff 49%, #9aa6af 77%, #fff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 5px rgb(255 255 255 / 88%)) drop-shadow(0 0 22px rgb(205 235 255 / 48%));
+  transition-duration: 1800ms, 1800ms, 1800ms, 1800ms, 1800ms;
+}
+
+.lumi-motion-intro.is-showcase .lumi-motion-greeting,
+.lumi-motion-intro.is-ready .lumi-motion-greeting {
+  top: 30px;
+  right: 42px;
+}
+
+.lumi-neon-i {
+  position: relative;
+  display: inline-block;
+  color: #f8ffff;
+  background: none;
+  -webkit-text-fill-color: #f8ffff;
+}
+
+.lumi-neon-i::after {
+  content: "";
+  position: absolute;
+  top: -.15em;
+  left: 50%;
+  width: .2em;
+  height: .2em;
+  border-radius: 50%;
+  background: var(--aqua);
+  box-shadow: 0 0 7px var(--aqua), 0 0 18px rgb(37 244 238 / 94%);
+  transform: translateX(-50%);
+}
+
+.lumi-motion-left {
+  left: var(--lumi-ai-rail-left);
+  width: 174px;
+}
+
+.lumi-motion-left .lumi-motion-completed-card {
+  animation: lumi-motion-settle-slow 1450ms cubic-bezier(.18, .82, .2, 1) both;
+}
+
+.lumi-motion-index {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  left: 10px;
+  color: transparent;
+  font-family: "Arial Rounded MT Bold", "Segoe UI Rounded", "Nunito", sans-serif;
+  font-size: clamp(1.65rem, 2.1vw, 2.35rem);
+  font-weight: 900;
+  line-height: 1;
+  background: linear-gradient(145deg, #fff, #aab8c2 56%, #fff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 68%)) drop-shadow(0 0 8px rgb(255 255 255 / 40%));
+}
+
+@keyframes lumi-motion-settle-slow {
+  from {
+    opacity: 0;
+    filter: blur(8px) brightness(1.25);
+    transform: translate(
+      calc(50vw - var(--lumi-ai-rail-left) - 87px),
+      var(--settle-y)
+    ) scale(2.25);
+  }
+  48% {
+    opacity: .88;
+    filter: blur(1px) brightness(1.08);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@media (max-width: 1080px) {
+  .lumi-motion-intro { --lumi-ai-rail-left: clamp(18px, 5vw, 48px); }
+  .lumi-motion-left { width: 132px; }
+}
+
+/* Final Lumi sequence layout: the particle field is a background only, while
+   each completed motion settles into the same 2 × 2 rail used in teaching. */
+.lumi-motion-intro {
+  --lumi-preview-left: 0px;
+  isolation: isolate;
+}
+
+.lumi-motion-intro .lumi-particle-field {
+  z-index: 0;
+}
+
+.lumi-motion-greeting {
+  z-index: 4;
+  color: #f8ffff;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: #f8ffff;
+  filter: none;
+  text-shadow: none;
+}
+
+.lumi-neon-i {
+  color: #f8ffff;
+  -webkit-text-fill-color: #f8ffff;
+  text-shadow: none;
+}
+
+.lumi-neon-i::after {
+  box-shadow: none;
+}
+
+.lumi-motion-stage {
+  z-index: 2;
+}
+
+.lumi-motion-stage.is-holding {
+  opacity: .92;
+}
+
+.lumi-motion-left {
+  z-index: 3;
+  top: 50%;
+  left: var(--lumi-preview-left);
+  display: grid;
+  grid-template-columns: repeat(2, 208px);
+  gap: 20px 24px;
+  width: 440px;
+  margin: 0;
+  transform: translateY(-50%);
+}
+
+.lumi-motion-left .lumi-motion-completed-card {
+  position: relative;
+  display: block;
+  width: 208px;
+  height: 277px;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 16px;
+  background: #08090d;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 38%);
+  animation: lumi-motion-settle-slow 1450ms cubic-bezier(.18, .82, .2, 1) both;
+}
+
+.lumi-motion-left .lumi-motion-completed-card video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: cover;
+  background: #08090d;
+}
+
+.lumi-motion-left .lumi-motion-completed-card figcaption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  padding: 24px 8px 8px;
+  overflow: hidden;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: linear-gradient(transparent, rgb(0 0 0 / 88%));
+}
+
+.lumi-motion-left .lumi-motion-index {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  left: 10px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  aspect-ratio: auto;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 75%);
+  border-radius: 50%;
+  color: #fff;
+  font-family: "Arial Rounded MT Bold", "Segoe UI Rounded", "Nunito", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1;
+  background: rgb(3 7 11 / 68%);
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: #fff;
+  filter: none;
+}
+
+@keyframes lumi-motion-settle-slow {
+  from {
+    opacity: 0;
+    transform: translate(var(--settle-x), var(--settle-y)) scale(2.25);
+  }
+  55% { opacity: .92; }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* The teaching page reuses exactly the same card size, 2 × 2 grid and gap. */
+@media (min-width: 1081px) {
+  .teaching-studio-workspace {
+    justify-content: flex-start;
+    padding-left: 0;
+  }
+
+  .motion-thumbnail-rail {
+    flex: 0 0 440px;
+    width: 440px;
+    margin-left: 0;
+  }
+
+  .motion-thumbnail-rail .motion-preview-strip {
+    grid-template-columns: repeat(2, 208px);
+    gap: 20px 24px;
+    width: 440px;
+  }
+
+  .motion-thumbnail-rail .motion-preview-card {
+    width: 208px;
+    border-radius: 16px;
+  }
+
+  .motion-thumbnail-rail .motion-preview-card .motion-preview-index {
+    top: 9px;
+    left: 10px;
+    width: 32px;
+    height: 32px;
+    font-size: 1.05rem;
+  }
+
+  .motion-thumbnail-rail .motion-preview-card img,
+  .motion-thumbnail-rail .motion-preview-card > span {
+    width: 208px;
+    height: 277px;
+    aspect-ratio: auto;
+  }
+
+  .studio-layout {
+    width: min(calc(100% - 476px), calc((100dvh - 146px) * 1.25));
+    max-width: calc((100dvh - 146px) * 1.25);
+  }
+}
+
+@media (max-width: 700px) {
+  .lumi-motion-left {
+    left: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: min(232px, calc(100vw - 32px));
+  }
+
+  .lumi-motion-left .lumi-motion-completed-card {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 9 / 12;
+  }
+}
+
+/* Lumi preview landing layout: a stable two-by-two rail that matches the teaching view. */
+.lumi-motion-intro {
+  --lumi-preview-left: clamp(24px, 3vw, 56px);
+}
+
+.lumi-motion-greeting {
+  color: #f7fbfc;
+  background: none;
+  -webkit-text-fill-color: #f7fbfc;
+  filter: none;
+  text-shadow: none;
+}
+
+.lumi-neon-i {
+  color: #f7fbfc;
+  -webkit-text-fill-color: #f7fbfc;
+}
+
+.lumi-neon-i::after {
+  top: .06em;
+  width: .17em;
+  height: .17em;
+  box-shadow: 0 0 5px rgb(37 244 238 / 80%);
+}
+
+.lumi-motion-left {
+  left: var(--lumi-preview-left);
+  width: 380px;
+  display: grid;
+  grid-template-columns: repeat(2, 172px);
+  grid-template-rows: repeat(2, auto);
+  gap: 16px 36px;
+  align-content: center;
+  transform: translateY(-50%);
+}
+
+.lumi-motion-left .lumi-motion-completed-card {
+  display: block;
+  width: 172px;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 9 / 12;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #0b0d11;
+  animation: lumi-motion-settle-grid 1450ms cubic-bezier(.18, .82, .2, 1) both;
+}
+
+.lumi-motion-left .lumi-motion-completed-card video {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  background: #0b0d11;
+}
+
+.lumi-motion-stage.is-holding {
+  opacity: 1;
+}
+
+@keyframes lumi-motion-settle-grid {
+  from {
+    opacity: 0;
+    transform: translate(var(--settle-x), var(--settle-y)) scale(2.15);
+  }
+  55% { opacity: .92; }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@media (max-width: 760px) {
+  .lumi-motion-left {
+    --lumi-preview-left: 14px;
+    width: 214px;
+    grid-template-columns: repeat(2, 100px);
+    gap: 10px 14px;
+  }
+
+  .lumi-motion-left .lumi-motion-completed-card { width: 100px; border-radius: 12px; }
+}
+
+/* Keep Lumi's landing rail identical to the AI teaching rail. */
+.lumi-motion-preload {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lumi-motion-stage .lumi-motion-index {
+  position: absolute;
+  z-index: 3;
+  top: 13px;
+  left: 13px;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-radius: 50%;
+  color: #fff;
+  font-family: "Arial Rounded MT Bold", "Segoe UI Rounded", "Nunito", sans-serif;
+  font-size: 1.18rem;
+  font-weight: 900;
+  line-height: 1;
+  background: rgb(3 7 11 / 58%);
+}
+
+@media (min-width: 1081px) {
+  .lumi-motion-intro {
+    --lumi-preview-left: 14px;
+  }
+
+  .lumi-motion-left {
+    top: calc(50% + 38px);
+    left: var(--lumi-preview-left);
+    width: 440px;
+    min-height: 578px;
+    grid-template-columns: repeat(2, 208px);
+    grid-template-rows: repeat(2, 279px);
+    gap: 20px 24px;
+  }
+
+  .lumi-motion-left .lumi-motion-completed-card {
+    width: 208px;
+    height: 279px;
+    aspect-ratio: auto;
+    border-radius: 16px;
+    background: rgb(8 10 15 / 34%);
+    box-shadow: 0 14px 34px rgb(0 0 0 / 28%);
+  }
+
+  .lumi-motion-left .lumi-motion-completed-card video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    background: transparent;
+    transition: opacity 220ms ease;
+  }
+
+  .lumi-motion-left .lumi-motion-completed-card.is-video-ready video {
+    opacity: 1;
   }
 }

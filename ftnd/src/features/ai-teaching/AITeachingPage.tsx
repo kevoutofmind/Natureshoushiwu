@@ -39,6 +39,7 @@ import {
 import { getPopularDances } from "@/features/popular-dances/api";
 import { getTeachingWorkspace } from "./api";
 import FloatingAiCoach from "./components/FloatingAiCoach";
+import LumiMotionIntro from "./components/LumiMotionIntro";
 import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
 import MotionPreviewSequence from "./components/MotionPreviewSequence";
 import {
@@ -51,8 +52,6 @@ import { useTeachingRuntime } from "./hooks/useTeachingRuntime";
 import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
-
-import { teachingMotionClipUrls } from './motion-video-catalog';
 
 const FULL_FRAME_STREAK = 3;
 
@@ -142,7 +141,7 @@ export default function AITeachingPage({
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [lumiStage, setLumiStage] = useState<"intro" | "preview" | "teaching">(
+  const [lumiStage, setLumiStage] = useState<"intro" | "teaching">(
     onboarding ? "intro" : "teaching",
   );
   const {
@@ -221,7 +220,6 @@ export default function AITeachingPage({
 
   const overviewReferenceUrl =
     referenceUrl || referenceVideoUrl || selectedReferenceUrl;
-  const motionClipUrls = teachingMotionClipUrls(activeDanceId);
   const effectiveReferenceUrl =
     referenceUrl || activePlaybackVideoUrl || overviewReferenceUrl;
   const currentInstruction = teachingSession
@@ -410,11 +408,7 @@ export default function AITeachingPage({
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const finishLumiIntro = () => {
-    setLumiStage("preview");
-  };
-
-  const enterTeachingFromPreview = () => {
+  const enterTeachingFromLumi = () => {
     const referenceVideo = referenceVideoRef.current;
     if (referenceVideo) {
       referenceVideo.pause();
@@ -583,10 +577,9 @@ export default function AITeachingPage({
             mode="compact"
             videoUrl={overviewReferenceUrl}
             motions={motionBreakdown?.motions}
-            motionVideoUrls={motionClipUrls}
             activeMotionIndex={activeMotionClipIndex}
             onSelectMotion={(motionIndex) => {
-              setError('');
+              setError("");
               void playTeachingMotionClip(motionIndex);
             }}
           />
@@ -815,9 +808,9 @@ export default function AITeachingPage({
           </Box>
         </Box>
 
-        {lumiStage !== "preview" && (
+        {lumiStage === "teaching" && (
           <FloatingAiCoach
-            introOpen={lumiStage === "intro"}
+            introOpen={false}
             danceTitle={danceTitle ?? selectedDanceId ?? activeDanceId}
             motions={lessonMotions}
             phaseLabel={phaseLabel}
@@ -827,16 +820,14 @@ export default function AITeachingPage({
               "我会陪你一步一步练，先看清手的位置。"
             }
             review={null}
-            onFinishIntro={finishLumiIntro}
+            onFinishIntro={() => undefined}
           />
         )}
-        {lumiStage === "preview" && (
-          <MotionPreviewSequence
-            mode="overlay"
-            videoUrl={overviewReferenceUrl}
+        {lumiStage === "intro" && (
+          <LumiMotionIntro
+            danceId={selectedDanceId ?? activeDanceId}
             motions={motionBreakdown?.motions}
-            motionVideoUrls={motionClipUrls}
-            onContinue={enterTeachingFromPreview}
+            onStart={enterTeachingFromLumi}
           />
         )}
       </Box>

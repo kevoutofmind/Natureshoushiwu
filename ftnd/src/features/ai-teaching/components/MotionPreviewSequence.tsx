@@ -13,7 +13,6 @@ interface MotionPreview {
 interface MotionPreviewSequenceProps {
   videoUrl: string;
   motions?: MotionPreview[];
-  motionVideoUrls?: string[];
   activeMotionIndex?: number | null;
   onSelectMotion?: (motionIndex: number) => void;
   mode: "overlay" | "compact";
@@ -23,7 +22,6 @@ interface MotionPreviewSequenceProps {
 export default function MotionPreviewSequence({
   videoUrl,
   motions = [],
-  motionVideoUrls = [],
   activeMotionIndex = null,
   onSelectMotion,
   mode,
@@ -40,7 +38,6 @@ export default function MotionPreviewSequence({
   );
 
   useEffect(() => {
-    if (motionVideoUrls.some(Boolean)) return;
     if (!videoUrl) {
       return;
     }
@@ -88,79 +85,30 @@ export default function MotionPreviewSequence({
       video.removeAttribute("src");
       video.load();
     };
-  }, [motionVideoUrls, previewMotions, videoUrl]);
-
-  useEffect(() => {
-    if (!motionVideoUrls.some(Boolean)) return;
-    let cancelled = false;
-
-    const captureClipFrames = async () => {
-      const captured: string[] = [];
-      for (const sourceUrl of motionVideoUrls.slice(0, previewMotions.length)) {
-        if (!sourceUrl) {
-          captured.push('');
-          continue;
-        }
-        const video = document.createElement('video');
-        video.muted = true;
-        video.playsInline = true;
-        video.preload = 'auto';
-        video.src = sourceUrl;
-        await new Promise<void>((resolve, reject) => {
-          video.addEventListener('loadedmetadata', () => resolve(), { once: true });
-          video.addEventListener('error', () => reject(), { once: true });
-          video.load();
-        }).catch(() => undefined);
-        if (cancelled) return;
-        if (!video.videoWidth) {
-          captured.push('');
-          continue;
-        }
-        const frameTime = Math.min(0.18, Math.max(0, video.duration - 0.08));
-        await new Promise<void>((resolve) => {
-          const timeout = window.setTimeout(resolve, 1200);
-          video.currentTime = frameTime;
-          video.addEventListener('seeked', () => {
-            window.clearTimeout(timeout);
-            resolve();
-          }, { once: true });
-        });
-        if (cancelled) return;
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        captured.push(canvas.toDataURL('image/jpeg', 0.82));
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-      }
-      if (!cancelled) setFrames(captured);
-    };
-
-    void captureClipFrames();
-    return () => {
-      cancelled = true;
-    };
-  }, [motionVideoUrls.join('|'), previewMotions.length]);
+  }, [previewMotions, videoUrl]);
 
   const cards = previewMotions.map((motion, index) => (
     <figure
       className="motion-preview-card"
       style={{ "--motion-delay": `${(3 - index) * 150}ms` } as CSSProperties}
       key={motion.motionId}
-      role={onSelectMotion ? 'button' : undefined}
+      role={onSelectMotion ? "button" : undefined}
       tabIndex={onSelectMotion ? 0 : undefined}
       aria-label={onSelectMotion ? `播放第 ${index + 1} 个动作：${motion.label}` : undefined}
       aria-pressed={onSelectMotion ? activeMotionIndex === index : undefined}
       onClick={() => onSelectMotion?.(index)}
       onKeyDown={(event) => {
-        if (!onSelectMotion || (event.key !== 'Enter' && event.key !== ' ')) return;
+        if (!onSelectMotion || (event.key !== "Enter" && event.key !== " ")) {
+          return;
+        }
         event.preventDefault();
         onSelectMotion(index);
       }}
     >
       {videoUrl && frames[index] ? <img src={frames[index]} alt={motion.label} /> : <span />}
+      <span className="motion-preview-index" aria-hidden="true">
+        {index + 1}
+      </span>
       <figcaption>{motion.label}</figcaption>
     </figure>
   ));
