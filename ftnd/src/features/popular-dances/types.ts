@@ -1,6 +1,7 @@
 export interface PopularDance {
   id: string;
   title: string;
+  displayTitle?: string;
   creator?: string;
   coverUrl?: string;
   coverGradient?: string;

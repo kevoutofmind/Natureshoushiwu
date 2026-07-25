@@ -29,8 +29,8 @@ export type BeautySettings = {
 };
 
 export const DEFAULT_BEAUTY_SETTINGS: BeautySettings = {
-  skinSmooth: 0.38,
-  brightness: 0.22,
+  skinSmooth: 0,
+  brightness: 0,
   faceSlim: 0.18,
   eyeEnlarge: 0.1,
 };

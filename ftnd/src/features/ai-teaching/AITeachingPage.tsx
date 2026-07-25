@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CameraswitchRoundedIcon from "@mui/icons-material/CameraswitchRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
 import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlineRounded";
+import PlayCircleOutlineRoundedIcon from "@mui/icons-material/PlayCircleOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import {
@@ -168,6 +169,7 @@ export default function AITeachingPage({
   const [selectedLessonEndIndex, setSelectedLessonEndIndex] = useState<number | null>(null);
   const [trainingClipIndex, setTrainingClipIndex] = useState(0);
   const [evaluationCountdown, setEvaluationCountdown] = useState(EVALUATION_COUNTDOWN_SECONDS);
+  const [recordingCountdown, setRecordingCountdown] = useState<number | null>(null);
   const [evaluationResult, setEvaluationResult] = useState<LessonEvaluationResult | null>(null);
   const [completedThroughIndex, setCompletedThroughIndex] = useState(-1);
   const lessonFlowStageRef = useRef<LessonFlowStage>("overview");
@@ -175,6 +177,7 @@ export default function AITeachingPage({
   const trainingTimerRef = useRef<number | null>(null);
   const trainingPreFadeTimerRef = useRef<number | null>(null);
   const countdownTimerRef = useRef<number | null>(null);
+  const recordingCountdownTimerRef = useRef<number | null>(null);
   const evaluationVisibleFrameCountRef = useRef(0);
   const previousTrainingVideoUrlRef = useRef("");
   const referenceStageRef = useRef<HTMLDivElement>(null);
@@ -381,6 +384,8 @@ export default function AITeachingPage({
       if (trainingPreFadeTimerRef.current)
         window.clearTimeout(trainingPreFadeTimerRef.current);
       if (countdownTimerRef.current) window.clearTimeout(countdownTimerRef.current);
+      if (recordingCountdownTimerRef.current)
+        window.clearInterval(recordingCountdownTimerRef.current);
       if (referenceTransitionTimerRef.current)
         window.clearTimeout(referenceTransitionTimerRef.current);
     },
@@ -619,7 +624,13 @@ export default function AITeachingPage({
     setTrainingClipIndex(0);
     setEvaluationResult(null);
     setEvaluationCountdown(EVALUATION_COUNTDOWN_SECONDS);
-    referenceVideoRef.current?.play().catch(() => undefined);
+    window.requestAnimationFrame(() => {
+      const video = referenceVideoRef.current;
+      if (!video) return;
+      video.currentTime = 0;
+      setReferencePlaybackTimeMs(0);
+      void video.play().catch(() => undefined);
+    });
   }, [clearLessonTimers]);
 
   const retryCurrentTraining = useCallback(() => {
@@ -755,7 +766,9 @@ export default function AITeachingPage({
     };
 
     video.loop = lessonFlowStage === "overview" || lessonFlowStage === "completed";
-    video.muted = true;
+    const silenceForLumiIntro = lumiStage === "intro";
+    video.defaultMuted = silenceForLumiIntro;
+    video.muted = silenceForLumiIntro;
 
     const desiredUrl = new URL(playbackReferenceUrl, window.location.href).href;
     if ((video.currentSrc || video.src) !== desiredUrl) {
@@ -815,6 +828,7 @@ export default function AITeachingPage({
     finishEvaluation,
     playbackReferenceUrl,
     lessonFlowStage,
+    lumiStage,
     selectedMotionEnd,
     trainingClipIndex,
   ]);
@@ -865,6 +879,48 @@ export default function AITeachingPage({
     };
     recorder.start(250);
     setRecordingState("recording");
+
+    if (lessonFlowStage === "overview" || lessonFlowStage === "completed") {
+      const referenceVideo = referenceVideoRef.current;
+      if (referenceVideo) {
+        referenceVideo.currentTime = 0;
+        setReferencePlaybackTimeMs(0);
+        void referenceVideo.play().catch(() => undefined);
+      }
+    }
+  };
+
+  const beginRecordingCountdown = () => {
+    if (recordingCountdownTimerRef.current || recordingCountdown !== null) return;
+    if (!streamRef.current || typeof MediaRecorder === "undefined") {
+      setError("请先打开摄像头，或更换支持 MediaRecorder 的浏览器。");
+      return;
+    }
+
+    setError("");
+    const referenceVideo = referenceVideoRef.current;
+    if (referenceVideo) {
+      referenceVideo.pause();
+      referenceVideo.currentTime = 0;
+      setReferencePlaybackTimeMs(0);
+    }
+
+    let remaining = EVALUATION_COUNTDOWN_SECONDS;
+    setRecordingCountdown(remaining);
+    recordingCountdownTimerRef.current = window.setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) {
+        setRecordingCountdown(remaining);
+        return;
+      }
+
+      if (recordingCountdownTimerRef.current) {
+        window.clearInterval(recordingCountdownTimerRef.current);
+        recordingCountdownTimerRef.current = null;
+      }
+      setRecordingCountdown(null);
+      startRecording();
+    }, 1000);
   };
 
   const stopRecording = () => {
@@ -876,7 +932,7 @@ export default function AITeachingPage({
   const startRecordingFromVoice = async () => {
     if (recorderRef.current?.state === "recording") return;
     if (!streamRef.current) await startCamera();
-    if (streamRef.current) startRecording();
+    if (streamRef.current) beginRecordingCountdown();
   };
 
   const handlePageVoiceResult = (result: VoiceCommandResult) => {
@@ -945,7 +1001,11 @@ export default function AITeachingPage({
   };
 
   return (
-    <Box className={`teaching-page lesson-flow-stage-${lessonFlowStage}`}>
+    <Box
+      className={`teaching-page lesson-flow-stage-${lessonFlowStage}${
+        recordingCountdown !== null ? " is-recording-countdown" : ""
+      }`}
+    >
       <Box className="teaching-header teaching-header-spacer" aria-hidden="true" />
 
       {(visionState === "loading" || visionError) && (
@@ -990,6 +1050,14 @@ export default function AITeachingPage({
             }
 
           />
+          <Button
+            className="motion-overview-button"
+            variant="outlined"
+            onClick={returnToOverview}
+            startIcon={<PlayCircleOutlineRoundedIcon />}
+          >
+            完整视频
+          </Button>
         </aside>
 
         <Box className="studio-layout">
@@ -1007,10 +1075,10 @@ export default function AITeachingPage({
                     <video
                       ref={referenceVideoRef}
                       src={playbackReferenceUrl}
-                      controls={lessonFlowStage !== "overview" && lessonFlowStage !== "completed"}
+                      controls
                       autoPlay
                       loop={lessonFlowStage === "overview" || lessonFlowStage === "completed"}
-                      muted
+                      muted={lumiStage === "intro"}
                       playsInline
                       preload="metadata"
                       onLoadedMetadata={(event) =>
@@ -1047,8 +1115,10 @@ export default function AITeachingPage({
                     <strong>{currentMotionLabel}</strong>
                   </Box>
                 )}
-                {lessonFlowStage === "countdown" && (
-                  <Box className="lesson-countdown">{evaluationCountdown}</Box>
+                {(lessonFlowStage === "countdown" || recordingCountdown !== null) && (
+                  <Box className="lesson-countdown">
+                    {recordingCountdown ?? evaluationCountdown}
+                  </Box>
                 )}
               </Box>
             </Box>
@@ -1164,14 +1234,9 @@ export default function AITeachingPage({
                 </Button>
               )}
               {lessonFlowStage === "feedback" && (
-                <>
-                  <Button variant="contained" onClick={returnToOverview}>
-                    回主界面
-                  </Button>
-                  <Button variant="outlined" onClick={retryCurrentTraining}>
-                    从训练再来
-                  </Button>
-                </>
+                <Button variant="outlined" onClick={retryCurrentTraining}>
+                  从训练再来
+                </Button>
               )}
               {lessonFlowStage === "completed" && recordingState !== "recording" && (
                 <Button
@@ -1183,11 +1248,6 @@ export default function AITeachingPage({
                   开始录制完整版本
                 </Button>
               )}
-              {lessonFlowStage !== "overview" && lessonFlowStage !== "completed" && (
-                <Button variant="outlined" onClick={returnToOverview}>
-                  完整视频
-                </Button>
-              )}
               {recordingState === "idle" && lessonFlowStage !== "completed" && (
                 <Button
                   variant="contained"
@@ -1197,15 +1257,17 @@ export default function AITeachingPage({
                   打开摄像头
                 </Button>
               )}
-              {recordingState === "camera-ready" && lessonFlowStage !== "completed" && (
+              {recordingState === "camera-ready" && lessonFlowStage === "overview" && (
                 <Button
                   variant="contained"
                   color="secondary"
-                  onClick={startRecording}
-                  disabled={rendererState === "loading"}
+                  onClick={beginRecordingCountdown}
+                  disabled={rendererState === "loading" || recordingCountdown !== null}
                   startIcon={<FiberManualRecordRoundedIcon />}
                 >
-                  开始录制并启动 AI 教学
+                  {recordingCountdown === null
+                    ? "开始录制并启动 AI 教学"
+                    : `倒计时 ${recordingCountdown}`}
                 </Button>
               )}
               {recordingState === "recording" && (

@@ -1,6 +1,16 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import './globals.css';
-import RefreshToWelcome from '@/components/RefreshToWelcome';
+
+const refreshToWelcomeScript = `
+  try {
+    const navigation = performance.getEntriesByType('navigation')[0];
+    if (location.pathname !== '/' && navigation && navigation.type === 'reload') {
+      document.documentElement.dataset.refreshRedirect = 'true';
+      location.replace('/');
+    }
+  } catch (_) {}
+`;
 
 export const metadata: Metadata = {
   title: 'MOVE / MATCH · AI 手势舞教学',
@@ -15,7 +25,9 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <RefreshToWelcome />
+        <Script id="refresh-to-welcome" strategy="beforeInteractive">
+          {refreshToWelcomeScript}
+        </Script>
         {children}
       </body>
     </html>

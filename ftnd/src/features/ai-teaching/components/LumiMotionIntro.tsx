@@ -1,6 +1,13 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import LumiWebGLParticleField from "./LumiWebGLParticleField";
 
 interface MotionLabel {
@@ -35,6 +42,9 @@ export default function LumiMotionIntro({
   const [completedIndices, setCompletedIndices] = useState<number[]>([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [loadedClipIndices, setLoadedClipIndices] = useState<number[]>([]);
+  const transitionLock = useRef(false);
+  const greetingTimer = useRef<number | null>(null);
+  const transitionTimer = useRef<number | null>(null);
   const resolvedDanceId = danceId in MOTION_CLIPS ? danceId : "dance-001";
   const clips = MOTION_CLIPS[resolvedDanceId];
   const cards = useMemo(
@@ -48,31 +58,60 @@ export default function LumiMotionIntro({
   );
 
   useEffect(() => {
-    // Fade in, then leave the greeting in the center for a full four seconds.
-    const timer = window.setTimeout(() => setPhase("showcase"), 4600);
-    return () => window.clearTimeout(timer);
+    greetingTimer.current = window.setTimeout(() => setPhase("showcase"), 2500);
+
+    return () => {
+      if (greetingTimer.current !== null) window.clearTimeout(greetingTimer.current);
+      if (transitionTimer.current !== null) window.clearTimeout(transitionTimer.current);
+    };
   }, []);
 
   const completeCurrentClip = () => {
-    if (isTransitioning) return;
+    if (phase !== "showcase" || transitionLock.current) return;
 
+    transitionLock.current = true;
     setIsTransitioning(true);
     setCompletedIndices((current) =>
       current.includes(currentIndex) ? current : [...current, currentIndex],
     );
 
     if (currentIndex >= cards.length - 1) {
-      window.setTimeout(() => {
+      setPhase("ready");
+      transitionTimer.current = window.setTimeout(() => {
         setIsTransitioning(false);
-        setPhase("ready");
+        transitionLock.current = false;
       }, 1450);
       return;
     }
 
-    window.setTimeout(() => {
-      setCurrentIndex((current) => current + 1);
+    // The completed clip moves left while the next clip fades into the center.
+    setCurrentIndex((current) => current + 1);
+    transitionTimer.current = window.setTimeout(() => {
       setIsTransitioning(false);
+      transitionLock.current = false;
     }, 1450);
+  };
+
+  const handleIntroClick = () => {
+    if (phase === "greeting") {
+      if (greetingTimer.current !== null) window.clearTimeout(greetingTimer.current);
+      setPhase("showcase");
+      return;
+    }
+
+    completeCurrentClip();
+  };
+
+  const handleIntroPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest(".lumi-motion-start")
+    ) {
+      return;
+    }
+
+    handleIntroClick();
   };
 
   const markClipLoaded = (index: number) => {
@@ -82,10 +121,14 @@ export default function LumiMotionIntro({
   };
 
   return (
-    <section className={`lumi-motion-intro is-${phase}`} aria-label="Lumi 动作引导">
+    <section
+      className={`lumi-motion-intro is-${phase}`}
+      aria-label="Lumi 动作引导"
+      onPointerDownCapture={handleIntroPointerDown}
+    >
       <LumiWebGLParticleField />
       <h1 className="lumi-motion-greeting">
-        Hi, I&apos;m Lum<span className="lumi-neon-i">i</span>
+        Hi, I&apos;m Lum<span className="lumi-neon-i" aria-label="i">ı</span>
       </h1>
       <div className="lumi-motion-preload" aria-hidden="true">
         {cards.map((card, index) => (
@@ -141,7 +184,7 @@ export default function LumiMotionIntro({
 
       {phase === "showcase" && (
         <figure
-          className={`lumi-motion-stage${isTransitioning ? " is-holding" : ""}`}
+          className={`lumi-motion-stage${isTransitioning ? " is-transitioning" : ""}`}
           key={cards[currentIndex].id}
         >
           <video
@@ -162,7 +205,14 @@ export default function LumiMotionIntro({
       )}
 
       {phase === "ready" && (
-        <button type="button" className="lumi-motion-start" onClick={onStart}>
+        <button
+          type="button"
+          className="lumi-motion-start"
+          onClick={(event) => {
+            event.stopPropagation();
+            onStart();
+          }}
+        >
           开始教学 <span aria-hidden="true">→</span>
         </button>
       )}

@@ -73,8 +73,6 @@ export default function AuthPage() {
                 <Typography component="h1" className="glitch-title" data-text="LUMI">LUMI</Typography>
                 <Typography className="brand-copy lumi-welcome-copy">
                   Lumi：下一代懂抖音用户的 VLM Agent
-                  <br />
-                  nature 拒我多模态，手势舞教学搞起来
                 </Typography>
               </Box>
             </Box>
@@ -90,14 +88,21 @@ export default function AuthPage() {
                   我觉醒的系统只能教手势舞
                 </Typography>
               </Box>
-              <Stack spacing={1.2}>
-                <Stack direction="row" spacing={1.2} alignItems="center">
+              <Stack className="lumi-welcome-manifesto" spacing={1.6}>
+                <Stack direction="row" spacing={1.2} alignItems="flex-start">
                   <AutoAwesomeRoundedIcon color="secondary" />
-                  <Typography fontWeight={800}>视觉理解动作，语音掌控节奏</Typography>
+                  <Typography className="lumi-welcome-manifesto-copy">
+                    nature 拒我多模态，
+                    <br />
+                    手势舞教学搞起来
+                  </Typography>
                 </Stack>
-                <Typography color="text.secondary" lineHeight={1.8}>
-                  从一支手势舞开始，让 Lumi 用视觉、语音和节奏陪你完成跟练。
-                </Typography>
+                <Box className="lumi-beat-track" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </Box>
               </Stack>
               <Button
                 variant="contained"

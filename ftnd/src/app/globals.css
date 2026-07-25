@@ -475,6 +475,28 @@ h6 {
   transform: translateY(-2px);
 }
 
+.dance-card-copy {
+  min-width: 0;
+  flex: 1;
+  padding-right: 14px;
+}
+
+.dance-card-title {
+  display: -webkit-box;
+  min-height: 4.2em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.4 !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.dance-card-creator {
+  margin-top: 8px !important;
+  color: rgba(255, 255, 255, 0.68) !important;
+  font-weight: 700 !important;
+}
+
 .dance-cover {
   aspect-ratio: 3 / 4;
   display: grid;
@@ -2611,6 +2633,64 @@ h6 {
   line-height: 1.15;
 }
 
+.lumi-welcome-manifesto {
+  min-height: 112px;
+  padding: 2px 0 4px;
+}
+
+.lumi-welcome-manifesto .MuiSvgIcon-root {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  font-size: 1.45rem;
+}
+
+.lumi-welcome-manifesto-copy {
+  color: rgb(255 255 255 / 88%);
+  font-size: clamp(1.1rem, 1.5vw, 1.42rem) !important;
+  font-weight: 800 !important;
+  line-height: 1.45 !important;
+}
+
+.lumi-beat-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 280px);
+  height: 28px;
+  padding-left: 34px;
+}
+
+.lumi-beat-track::before {
+  content: "";
+  width: 22px;
+  height: 1px;
+  margin-right: 2px;
+  background: rgb(37 244 238 / 76%);
+}
+
+.lumi-beat-track span {
+  display: block;
+  width: 40px;
+  height: 8px;
+  background: var(--aqua);
+  box-shadow: 0 0 12px rgb(37 244 238 / 30%);
+}
+
+.lumi-beat-track span:nth-child(2) {
+  height: 15px;
+  background: #fff;
+}
+
+.lumi-beat-track span:nth-child(3) {
+  height: 22px;
+  background: var(--pink);
+  box-shadow: 0 0 12px rgb(254 44 85 / 30%);
+}
+
+.lumi-beat-track span:nth-child(4) {
+  height: 12px;
+}
+
 .workspace-draft-orb {
   flex: 0 0 auto;
   width: 34px;
@@ -2809,6 +2889,29 @@ h6 {
 
 .studio-column-reference .studio-actions {
   display: none;
+}
+
+.motion-thumbnail-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.motion-overview-button.MuiButton-root {
+  width: min(220px, 70%);
+  min-height: 40px;
+  margin-top: 24px;
+  border-color: rgb(37 244 238 / 68%);
+  color: #f7fbfc;
+  font-weight: 850;
+  background: rgb(6 11 15 / 72%);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 28%);
+}
+
+.motion-overview-button.MuiButton-root:hover {
+  border-color: var(--aqua);
+  color: #06100f;
+  background: var(--aqua);
 }
 
 .studio-column-camera .studio-actions {
@@ -3314,6 +3417,10 @@ h6 {
     #020306;
 }
 
+html[data-refresh-redirect="true"] body {
+  visibility: hidden;
+}
+
 .lumi-motion-greeting {
   position: fixed;
   z-index: 2;
@@ -3495,6 +3602,11 @@ h6 {
   background: var(--aqua);
   box-shadow: 0 0 7px var(--aqua), 0 0 18px rgb(37 244 238 / 94%);
   transform: translateX(-50%);
+}
+
+.lumi-motion-intro.is-greeting,
+.lumi-motion-intro.is-showcase {
+  cursor: pointer;
 }
 
 .lumi-motion-left {
@@ -3757,7 +3869,8 @@ h6 {
 }
 
 .lumi-neon-i::after {
-  top: .06em;
+  top: .1em;
+  left: calc(50% + .015em);
   width: .17em;
   height: .17em;
   box-shadow: 0 0 5px rgb(37 244 238 / 80%);
@@ -3796,6 +3909,11 @@ h6 {
 
 .lumi-motion-stage.is-holding {
   opacity: 1;
+}
+
+.lumi-motion-stage.is-transitioning {
+  z-index: 4;
+  pointer-events: none;
 }
 
 @keyframes lumi-motion-settle-grid {
@@ -3935,8 +4053,10 @@ h6 {
 
 .lesson-flow-stage-evaluation .motion-thumbnail-rail,
 .lesson-flow-stage-countdown .motion-thumbnail-rail,
+.is-recording-countdown .motion-thumbnail-rail,
 .lesson-flow-stage-evaluation .studio-actions,
-.lesson-flow-stage-countdown .studio-actions {
+.lesson-flow-stage-countdown .studio-actions,
+.is-recording-countdown .studio-actions {
   opacity: .34;
   filter: blur(2px) saturate(.7);
   pointer-events: none;
@@ -3945,7 +4065,9 @@ h6 {
 .lesson-flow-stage-evaluation .reference-phone,
 .lesson-flow-stage-evaluation .camera-stage,
 .lesson-flow-stage-countdown .reference-phone,
-.lesson-flow-stage-countdown .camera-stage {
+.lesson-flow-stage-countdown .camera-stage,
+.is-recording-countdown .reference-phone,
+.is-recording-countdown .camera-stage {
   border-color: rgb(37 244 238 / 86%);
   box-shadow: 0 0 0 2px rgb(37 244 238 / 34%), 0 0 42px rgb(37 244 238 / 30%);
 }

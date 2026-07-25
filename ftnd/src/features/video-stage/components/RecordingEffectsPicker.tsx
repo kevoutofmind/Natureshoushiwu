@@ -23,8 +23,6 @@ export function RecordingEffectsPicker({
 }) {
   const [expanded, setExpanded] = useState(false);
   const beautyControls: Array<{ key: keyof BeautySettings; label: string }> = [
-    { key: "skinSmooth", label: "磨皮" },
-    { key: "brightness", label: "提亮" },
     { key: "faceSlim", label: "瘦脸" },
     { key: "eyeEnlarge", label: "大眼" },
   ];
@@ -71,7 +69,7 @@ export function RecordingEffectsPicker({
             ))}
           </Box>
           <Box className="recording-effects-list" role="list" aria-label="录制特效">
-            {RECORDING_EFFECTS.map((effect) => {
+            {RECORDING_EFFECTS.slice(0, 3).map((effect) => {
               const selected = effect.id === value;
               return (
                 <Box key={effect.id} role="listitem">

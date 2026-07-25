@@ -59,7 +59,7 @@ export default function PopularDancesPage() {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return items;
     return items.filter((item) =>
-      `${item.title} ${item.creator ?? ''} ${item.difficulty ?? ''}`
+      `${item.displayTitle ?? ''} ${item.title} ${item.creator ?? ''}`
         .toLowerCase()
         .includes(normalized),
     );
@@ -128,10 +128,10 @@ export default function PopularDancesPage() {
       <Box>
         <Chip label="CHOOSE YOUR DANCE" color="primary" size="small" variant="outlined" />
         <Typography component="h1" variant="h3" fontWeight={950} mt={1.5}>
-          选择你想学习的手势舞
+          挑一支顺眼的，今天就拿下
         </Typography>
         <Typography color="text.secondary" mt={1}>
-          先选一支喜欢的舞蹈，AI 教练会直接带你进入整舞预览和动作拆解。
+          Lumi 负责把动作掰开揉碎，你负责跟着比划，手势舞这不就搞起来了。
         </Typography>
       </Box>
 
@@ -210,11 +210,20 @@ export default function PopularDancesPage() {
                 </Box>
                 <CardContent>
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Box>
-                      <Typography variant="h6" fontWeight={900}>
-                        {dance.title}
+                    <Box className="dance-card-copy">
+                      <Typography
+                        className="dance-card-title"
+                        variant="h6"
+                        fontWeight={900}
+                        title={dance.displayTitle ?? dance.title}
+                      >
+                        {dance.displayTitle ?? dance.title}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        className="dance-card-creator"
+                        variant="body2"
+                        color="text.secondary"
+                      >
                         {dance.creator}
                       </Typography>
                     </Box>
@@ -227,9 +236,6 @@ export default function PopularDancesPage() {
                     </IconButton>
                   </Stack>
                   <Stack direction="row" spacing={1} mt={1.5}>
-                    {dance.difficulty && (
-                      <Chip label={dance.difficulty} size="small" variant="outlined" />
-                    )}
                     {dance.durationSeconds !== undefined && (
                       <Chip label={`${dance.durationSeconds} 秒`} size="small" variant="outlined" />
                     )}
