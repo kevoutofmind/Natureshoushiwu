@@ -45,6 +45,29 @@ describe('VoiceControlService', () => {
 
     expect(result.data.accepted).toBe(false);
     expect(result.data.command.intent).toBeNull();
+    expect(result.data.responseText).toContain('我会一直陪着你');
+  });
+
+  it.each([
+    ['半速播放', 0.5],
+    ['设置为0,5倍速', 0.5],
+    ['设置为零点七五倍速', 0.75],
+    ['恢复正常速度', 1],
+    ['调整到一点二五倍', 1.25],
+    ['一点五倍速', 1.5],
+  ])('maps supported spoken rate %s to %s', (transcript, rate) => {
+    const result = service.interpret(transcript);
+    expect(result.data.command.intent).toBe('SET_PLAYBACK_RATE');
+    expect(result.data.command.parameters.playbackRate).toBe(rate);
+  });
+
+  it.each([
+    ['减慢速度', 'SLOW_DOWN'],
+    ['放慢一点', 'SLOW_DOWN'],
+    ['提高速度', 'SPEED_UP'],
+    ['再快一点', 'SPEED_UP'],
+  ])('maps speed phrase %s to %s', (transcript, intent) => {
+    expect(service.interpret(transcript).data.command.intent).toBe(intent);
   });
 
   it('leaves an ambiguous multi-part request for the cloud semantic router', () => {

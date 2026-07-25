@@ -16,6 +16,10 @@ import type {
   DatasetBuildProgress,
   ReferenceDanceDataset,
 } from "@/features/video-stage/reference-dataset.types";
+import {
+  compareGeometry,
+  mirrorSkeleton,
+} from "@/features/video-stage/vision-geometry";
 import type { SkeletonSnapshot } from "@/features/video-stage/vision-types";
 import type { VlmTeachingFeedback } from "../contracts/vlm-teaching-feedback";
 import type {
@@ -40,6 +44,25 @@ interface UseTeachingRuntimeOptions {
   applyFeedback: (feedback: VlmTeachingFeedback) => void;
 }
 
+export type ChallengeStage =
+  | "idle"
+  | "slow"
+  | "review"
+  | "targeted-replay"
+  | "fast"
+  | "complete";
+
+export interface SlowPracticeReview {
+  weakMotionIndex: number | null;
+  headline: string;
+  detail: string;
+}
+
+interface SlowPracticeSample {
+  videoTimeMs: number;
+  snapshot: SkeletonSnapshot;
+}
+
 export function useTeachingRuntime({
   danceId,
   referenceVideoRef,
@@ -54,6 +77,10 @@ export function useTeachingRuntime({
   const [referenceVideoUrl, setReferenceVideoUrl] = useState("");
   const [session, setSession] = useState<TeachingAgentSession | null>(null);
   const [latestSpeech, setLatestSpeech] = useState("");
+  const [challengeStage, setChallengeStage] =
+    useState<ChallengeStage>("idle");
+  const [slowPracticeReview, setSlowPracticeReview] =
+    useState<SlowPracticeReview | null>(null);
   const [lessonMotions, setLessonMotions] = useState<
     Array<{ motionId: string; instruction: string }>
   >([]);
@@ -67,6 +94,9 @@ export function useTeachingRuntime({
   const lastObservationAtRef = useRef(0);
   const observationPendingRef = useRef(false);
   const playbackCleanupRef = useRef<(() => void) | null>(null);
+  const challengeCommandRef = useRef<TeachingAgentCommand | null>(null);
+  const slowPracticeActiveRef = useRef(false);
+  const slowPracticeSamplesRef = useRef<SlowPracticeSample[]>([]);
 
   const speak = useCallback((speech: string) => {
     if (!speech.trim()) return;
@@ -107,9 +137,8 @@ export function useTeachingRuntime({
   const playRange = useCallback(
     async (
       command: TeachingAgentCommand,
-      completionEvent: TeachingAgentEventInput,
       status: TeachingRuntimeStatus,
-      executeTurn: (turn: TeachingAgentTurnResult) => Promise<void>,
+      onFinished: () => Promise<void>,
     ) => {
       playbackCleanupRef.current?.();
       const video = await waitForVideo(referenceVideoRef);
@@ -122,7 +151,10 @@ export function useTeachingRuntime({
       const playbackRate = numberArgument(command.arguments.playbackRate, 1);
       video.currentTime = Math.max(0, startMs / 1000);
       video.playbackRate = Math.max(0.25, Math.min(2, playbackRate));
-      video.muted = true;
+      video.muted = !(
+        status.state === "slow-practice" ||
+        status.state === "fast-challenge"
+      );
       setRuntimeStatus(status);
 
       let finished = false;
@@ -132,7 +164,7 @@ export function useTeachingRuntime({
         video.pause();
         cleanup();
         try {
-          await executeTurn(await sendEvent(completionEvent));
+          await onFinished();
         } catch (error: unknown) {
           setRuntimeStatus({ state: "error", message: errorMessage(error) });
         }
@@ -150,9 +182,24 @@ export function useTeachingRuntime({
       playbackCleanupRef.current = cleanup;
       video.addEventListener("timeupdate", handleTimeUpdate);
       video.addEventListener("ended", finish);
-      await video.play();
+      try {
+        await video.play();
+      } catch (error: unknown) {
+        if (
+          error instanceof DOMException &&
+          error.name === "NotAllowedError"
+        ) {
+          setRuntimeStatus({
+            ...status,
+            message: `${status.message} 点击“开始练习”后继续播放。`,
+          });
+          return;
+        }
+        cleanup();
+        throw error;
+      }
     },
-    [referenceVideoRef, sendEvent],
+    [referenceVideoRef],
   );
 
   const executeCommandsRef = useRef<
@@ -177,25 +224,52 @@ export function useTeachingRuntime({
           case "PLAY_FULL_PREVIEW":
             await playRange(
               command,
-              { type: "PREVIEW_FINISHED" },
               { state: "preview", message: "先完整观看一遍参考舞蹈。" },
-              executeCommandsRef.current!,
+              async () =>
+                executeCommandsRef.current!(
+                  await sendEvent({ type: "PREVIEW_FINISHED" }),
+                ),
             );
             break;
           case "PLAY_MOTION_DEMO":
             await playRange(
               command,
-              { type: "MOTION_DEMO_FINISHED" },
               { state: "demo", message: "正在慢速示范当前动作。" },
-              executeCommandsRef.current!,
+              async () =>
+                executeCommandsRef.current!(
+                  await sendEvent({ type: "MOTION_DEMO_FINISHED" }),
+                ),
             );
             break;
           case "START_FULL_CHALLENGE":
+            challengeCommandRef.current = command;
+            slowPracticeSamplesRef.current = [];
+            slowPracticeActiveRef.current = true;
+            setSlowPracticeReview(null);
+            setChallengeStage("slow");
             await playRange(
-              command,
-              { type: "FULL_CHALLENGE_FINISHED" },
-              { state: "challenge", message: "现在完整挑战整支舞蹈。" },
-              executeCommandsRef.current!,
+              {
+                ...command,
+                arguments: { ...command.arguments, playbackRate: 0.65 },
+              },
+              {
+                state: "slow-practice",
+                message: "0.65 倍慢速连贯练习中；这一遍不中断，结束后再集中反馈。",
+              },
+              async () => {
+                slowPracticeActiveRef.current = false;
+                const review = buildSlowPracticeReview(
+                  datasetRef.current,
+                  slowPracticeSamplesRef.current,
+                );
+                setSlowPracticeReview(review);
+                setChallengeStage("review");
+                setRuntimeStatus({
+                  state: "slow-review",
+                  message: review.detail,
+                });
+                speak(`${review.headline}${review.detail}`);
+              },
             );
             break;
           case "START_REALTIME_EVALUATION":
@@ -229,6 +303,7 @@ export function useTeachingRuntime({
               state: "completed",
               message: "整支舞蹈教学已经完成。",
             });
+            setChallengeStage("complete");
             break;
           case "REQUEST_CLOUD_COACHING":
           case "REQUEST_CLOUD_SUMMARY":
@@ -237,7 +312,7 @@ export function useTeachingRuntime({
         }
       }
     },
-    [applyFeedback, playRange, referenceVideoRef, speak],
+    [applyFeedback, playRange, referenceVideoRef, sendEvent, speak],
   );
   useEffect(() => {
     executeCommandsRef.current = executeTurn;
@@ -251,6 +326,11 @@ export function useTeachingRuntime({
   const prepare = useCallback(async () => {
     playbackCleanupRef.current?.();
     evaluatingRef.current = false;
+    challengeCommandRef.current = null;
+    slowPracticeActiveRef.current = false;
+    slowPracticeSamplesRef.current = [];
+    setChallengeStage("idle");
+    setSlowPracticeReview(null);
     setRuntimeStatus({
       state: "preparing-dataset",
       message: "正在从 5 个参考视频生成本地骨骼模板…",
@@ -294,6 +374,15 @@ export function useTeachingRuntime({
 
   const ingestSkeleton = useCallback(
     (snapshot: SkeletonSnapshot) => {
+      if (slowPracticeActiveRef.current) {
+        const videoTimeMs = (referenceVideoRef.current?.currentTime ?? 0) * 1000;
+        if (videoTimeMs > 0) {
+          slowPracticeSamplesRef.current = [
+            ...slowPracticeSamplesRef.current.slice(-359),
+            { videoTimeMs, snapshot },
+          ];
+        }
+      }
       if (!evaluatingRef.current) return;
       const now = performance.now();
       if (now - lastBufferedAtRef.current < 100) return;
@@ -341,12 +430,67 @@ export function useTeachingRuntime({
           observationPendingRef.current = false;
         });
     },
-    [executeTurn, sendEvent],
+    [executeTurn, referenceVideoRef, sendEvent],
   );
+
+  const replayWeakMotion = useCallback(async () => {
+    const dataset = datasetRef.current;
+    const review = slowPracticeReview;
+    if (!dataset || review?.weakMotionIndex == null) return;
+    const motion = dataset.lesson.motions[review.weakMotionIndex];
+    if (!motion) return;
+    setChallengeStage("targeted-replay");
+    await playRange(
+      {
+        commandId: `local-targeted-replay-${Date.now()}`,
+        tool: "PLAY_MOTION_DEMO",
+        arguments: {
+          startMs: motion.demoStartMs,
+          endMs: motion.demoEndMs,
+          playbackRate: 0.5,
+        },
+        requiresAck: false,
+        blocking: true,
+      },
+      {
+        state: "demo",
+        message: `正在针对性重看动作 ${review.weakMotionIndex + 1}。`,
+      },
+      async () => {
+        setChallengeStage("review");
+        setRuntimeStatus({ state: "slow-review", message: review.detail });
+      },
+    );
+  }, [playRange, slowPracticeReview]);
+
+  const startFullSpeedChallenge = useCallback(async () => {
+    const command = challengeCommandRef.current;
+    if (!command || challengeStage === "fast") return;
+    setChallengeStage("fast");
+    await playRange(
+      {
+        ...command,
+        arguments: { ...command.arguments, playbackRate: 1 },
+      },
+      {
+        state: "fast-challenge",
+        message: "原速完整挑战中。跟住音乐完成整支舞，不打断。",
+      },
+      async () =>
+        executeCommandsRef.current!(
+          await sendEvent({ type: "FULL_CHALLENGE_FINISHED" }),
+        ),
+    );
+  }, [challengeStage, playRange, sendEvent]);
 
   const sendVoiceCommand = useCallback(
     async (command: TeachingVoiceCommand) => {
       try {
+        if (command === "RESTART_LESSON") {
+          setChallengeStage("idle");
+          setSlowPracticeReview(null);
+          challengeCommandRef.current = null;
+        }
         await executeTurn(await sendEvent({ type: "VOICE_COMMAND", command }));
       } catch (error: unknown) {
         setRuntimeStatus({ state: "error", message: errorMessage(error) });
@@ -457,7 +601,101 @@ export function useTeachingRuntime({
     session,
     latestSpeech,
     lessonMotions,
+    challengeStage,
+    slowPracticeReview,
+    replayWeakMotion,
+    startFullSpeedChallenge,
+    speak,
   };
+}
+
+function buildSlowPracticeReview(
+  dataset: ReferenceDanceDataset | null,
+  samples: SlowPracticeSample[],
+): SlowPracticeReview {
+  if (!dataset || samples.length < 6) {
+    return {
+      weakMotionIndex: dataset && dataset.lesson.motions.length > 1 ? 1 : null,
+      headline: "节奏已经连起来了。",
+      detail:
+        "这遍没有采集到足够完整的骨骼帧；建议再看一次第 2 个动作的手腕高度，也可以直接进入原速挑战。",
+    };
+  }
+
+  let weakest:
+    | {
+        motionIndex: number;
+        measurement: ReturnType<typeof compareGeometry>[number];
+        severity: number;
+      }
+    | undefined;
+
+  dataset.lesson.motions.forEach((motion, motionIndex) => {
+    const midpoint = (motion.demoStartMs + motion.demoEndMs) / 2;
+    const practice = samples.reduce<SlowPracticeSample | undefined>(
+      (closest, sample) =>
+        sample.videoTimeMs >= motion.demoStartMs &&
+        sample.videoTimeMs <= motion.demoEndMs &&
+        (!closest ||
+          Math.abs(sample.videoTimeMs - midpoint) <
+            Math.abs(closest.videoTimeMs - midpoint))
+          ? sample
+          : closest,
+      undefined,
+    );
+    const pack = dataset.templatePacks.find(
+      (candidate) => candidate.motionId === motion.motionId,
+    );
+    const frames = pack?.templates[0]?.frames;
+    const referenceFrame = frames?.[Math.floor(frames.length / 2)];
+    if (!practice || !referenceFrame) return;
+
+    const measurements = compareGeometry(
+      {
+        timestampMs: referenceFrame.timestampMs,
+        pose: referenceFrame.pose,
+        leftHand: referenceFrame.leftHand ?? [],
+        rightHand: referenceFrame.rightHand ?? [],
+      },
+      mirrorSkeleton(practice.snapshot),
+    );
+    measurements.forEach((measurement) => {
+      if (measurement.reliability < 0.3) return;
+      const severity =
+        Math.abs(measurement.delta) /
+        (measurement.unit === "degree" ? 28 : 0.34);
+      if (!weakest || severity > weakest.severity) {
+        weakest = { motionIndex, measurement, severity };
+      }
+    });
+  });
+
+  if (!weakest || weakest.severity < 0.72) {
+    return {
+      weakMotionIndex: null,
+      headline: "这一遍很连贯。",
+      detail: "动作衔接和高度都比较稳定，可以带着刚才的感觉进入原速挑战。",
+    };
+  }
+
+  return {
+    weakMotionIndex: weakest.motionIndex,
+    headline: `第 ${weakest.motionIndex + 1} 个动作值得再抠一下。`,
+    detail: describeWeakMeasurement(weakest.measurement),
+  };
+}
+
+function describeWeakMeasurement(
+  measurement: ReturnType<typeof compareGeometry>[number],
+): string {
+  const side = measurement.name.startsWith("left") ? "左" : "右";
+  if (measurement.name.includes("wrist_height")) {
+    return `${side}手腕${measurement.delta < 0 ? "稍微偏低" : "稍微偏高"}。下一遍只盯住手腕高度，其他部分保持刚才的节奏。`;
+  }
+  if (measurement.name.includes("elbow_angle")) {
+    return `${side}手肘${measurement.delta < 0 ? "可以再打开一点" : "可以再收一点"}。先慢看一次局部，再进入原速会更稳。`;
+  }
+  return `身体重心有一点偏移。下一遍保持肩膀放松、躯干稳定，手部动作会更干净。`;
 }
 
 async function waitForVideo(
