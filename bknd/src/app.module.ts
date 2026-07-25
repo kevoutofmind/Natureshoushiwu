@@ -7,6 +7,7 @@ import { AiTeachingModule } from './ai-teaching/ai-teaching.module';
 import { DataPipelineModule } from './data-pipeline';
 import { DatabaseModule } from './database/database.module';
 import { DraftsModule } from './drafts/drafts.module';
+import { LumiVoiceModule } from './lumi-voice';
 import { MediaAssetsModule } from './media-assets';
 import { PopularDancesModule } from './popular-dances/popular-dances.module';
 import { UsersModule } from './users/users.module';
@@ -23,6 +24,7 @@ import { VoiceControlModule } from './voice-control';
     UsersModule,
     PopularDancesModule,
     AiTeachingModule,
+    LumiVoiceModule,
     DraftsModule,
     VoiceControlModule,
     VideoStageModule,

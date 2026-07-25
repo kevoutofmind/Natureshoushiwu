@@ -808,8 +808,8 @@ export default function AITeachingPage({
             motions={lessonMotions}
             phaseLabel={phaseLabel}
             speech={
-              currentInstruction ??
-              latestSpeech ??
+              latestSpeech ||
+              currentInstruction ||
               "我会陪你一步一步练，先看清手的位置。"
             }
             review={null}

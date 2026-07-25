@@ -37,6 +37,7 @@ import {
   registerReferenceDataset,
   sendTeachingAgentEvent,
   startTeachingSession,
+  synthesizeLumiSpeech,
 } from "../vlm-runtime-api";
 
 interface UseTeachingRuntimeOptions {
@@ -62,6 +63,10 @@ export interface SlowPracticeReview {
 interface SlowPracticeSample {
   videoTimeMs: number;
   snapshot: SkeletonSnapshot;
+}
+
+interface MutableValueRef<T> {
+  current: T;
 }
 
 export function useTeachingRuntime({
@@ -98,22 +103,112 @@ export function useTeachingRuntime({
   const challengeCommandRef = useRef<TeachingAgentCommand | null>(null);
   const slowPracticeActiveRef = useRef(false);
   const slowPracticeSamplesRef = useRef<SlowPracticeSample[]>([]);
+  const speechQueueRef = useRef<string[]>([]);
+  const speechPlaybackActiveRef = useRef(false);
+  const speechRunIdRef = useRef(0);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const playQueuedSpeechRef = useRef<(() => void) | null>(null);
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechAudioUrlRef = useRef<string | null>(null);
 
-  const speak = useCallback((speech: string) => {
-    if (!speech.trim()) return;
-    setLatestSpeech(speech);
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(speech);
-      utterance.lang = "zh-CN";
-      utterance.rate = 0.92;
-      utterance.pitch = 1.03;
-      utterance.volume = 1;
-      const voice = preferredChineseVoice(window.speechSynthesis.getVoices());
-      if (voice) utterance.voice = voice;
-      window.speechSynthesis.speak(utterance);
+  const playQueuedSpeech = useCallback(() => {
+    if (!("speechSynthesis" in window) || speechPlaybackActiveRef.current) {
+      return;
     }
+    const nextSpeech = speechQueueRef.current.shift();
+    if (!nextSpeech) return;
+
+    speechPlaybackActiveRef.current = true;
+    const runId = speechRunIdRef.current;
+    const finish = () => {
+      if (runId !== speechRunIdRef.current) return;
+      releaseLumiAudio(speechAudioRef, speechAudioUrlRef);
+      speechPlaybackActiveRef.current = false;
+      window.setTimeout(() => playQueuedSpeechRef.current?.(), 90);
+    };
+    let browserFallbackStarted = false;
+    const playBrowserFallback = () => {
+      if (browserFallbackStarted) return;
+      browserFallbackStarted = true;
+      if (!("speechSynthesis" in window)) {
+        finish();
+        return;
+      }
+      const utterance = createLumiUtterance(
+        nextSpeech,
+        preferredVoiceRef.current ??
+          preferredLumiVoice(window.speechSynthesis.getVoices()),
+      );
+      utterance.onend = finish;
+      utterance.onerror = finish;
+      window.speechSynthesis.speak(utterance);
+    };
+    const fallbackTimer = window.setTimeout(
+      playBrowserFallback,
+      LUMI_TTS_FALLBACK_DELAY_MS,
+    );
+
+    void synthesizeLumiSpeech(nextSpeech)
+      .then(async (audioUrl) => {
+        window.clearTimeout(fallbackTimer);
+        if (runId !== speechRunIdRef.current) {
+          URL.revokeObjectURL(audioUrl);
+          return;
+        }
+        if (browserFallbackStarted) {
+          URL.revokeObjectURL(audioUrl);
+          return;
+        }
+        const audio = new Audio(audioUrl);
+        speechAudioRef.current = audio;
+        speechAudioUrlRef.current = audioUrl;
+        audio.onended = finish;
+        audio.onerror = finish;
+        await audio.play();
+      })
+      .catch(() => {
+        window.clearTimeout(fallbackTimer);
+        releaseLumiAudio(speechAudioRef, speechAudioUrlRef);
+        playBrowserFallback();
+      });
   }, []);
+
+  useEffect(() => {
+    playQueuedSpeechRef.current = playQueuedSpeech;
+  }, [playQueuedSpeech]);
+
+  const stopSpeech = useCallback(() => {
+    speechRunIdRef.current += 1;
+    speechQueueRef.current = [];
+    speechPlaybackActiveRef.current = false;
+    releaseLumiAudio(speechAudioRef, speechAudioUrlRef);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }, []);
+
+  const speak = useCallback(
+    (speech: string) => {
+      const normalizedSpeech = normalizeLumiSpeech(speech);
+      if (!normalizedSpeech) return;
+      setLatestSpeech(normalizedSpeech);
+      if (!("speechSynthesis" in window)) return;
+
+      const nextChunks = chunkLumiSpeech(normalizedSpeech);
+      if (nextChunks.length === 0) return;
+      speechQueueRef.current = limitLumiSpeechQueue([
+        ...speechQueueRef.current,
+        ...nextChunks,
+      ]);
+      playQueuedSpeech();
+    },
+    [playQueuedSpeech],
+  );
+  const speakImmediately = useCallback(
+    (speech: string) => {
+      stopSpeech();
+      speak(speech);
+    },
+    [speak, stopSpeech],
+  );
 
   const sendEvent = useCallback(
     async (
@@ -324,8 +419,28 @@ export function useTeachingRuntime({
     };
   }, [executeTurn]);
 
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+    const refreshPreferredVoice = () => {
+      preferredVoiceRef.current =
+        preferredLumiVoice(window.speechSynthesis.getVoices()) ?? null;
+    };
+    refreshPreferredVoice();
+    window.speechSynthesis.addEventListener(
+      "voiceschanged",
+      refreshPreferredVoice,
+    );
+    return () => {
+      window.speechSynthesis.removeEventListener(
+        "voiceschanged",
+        refreshPreferredVoice,
+      );
+    };
+  }, []);
+
   const prepare = useCallback(async () => {
     playbackCleanupRef.current?.();
+    stopSpeech();
     evaluatingRef.current = false;
     challengeCommandRef.current = null;
     slowPracticeActiveRef.current = false;
@@ -387,7 +502,7 @@ export function useTeachingRuntime({
     } catch (error: unknown) {
       setRuntimeStatus({ state: "error", message: errorMessage(error) });
     }
-  }, [danceId, executeTurn]);
+  }, [danceId, executeTurn, stopSpeech]);
 
   const ingestSkeleton = useCallback(
     (snapshot: SkeletonSnapshot) => {
@@ -518,8 +633,27 @@ export function useTeachingRuntime({
 
   const handleVoiceResult = useCallback(
     (result: VoiceCommandResult) => {
-      if (!result.accepted || !result.command.intent) return;
+      if (!result.accepted || !result.command.intent) {
+        if (result.responseText.trim()) {
+          setRuntimeStatus((currentStatus) => ({
+            ...currentStatus,
+            message: result.responseText,
+          }));
+          speakImmediately(result.responseText);
+        }
+        return;
+      }
       const intent = result.command.intent as string;
+      if (intent === "COACH_QUESTION") {
+        if (result.responseText.trim()) {
+          setRuntimeStatus((currentStatus) => ({
+            ...currentStatus,
+            message: result.responseText,
+          }));
+          speakImmediately(result.responseText);
+        }
+        return;
+      }
       const directVideoIntents = new Set([
         "PAUSE",
         "RESUME",
@@ -548,7 +682,7 @@ export function useTeachingRuntime({
       const agentCommand = mappings[intent];
       if (agentCommand) void sendVoiceCommand(agentCommand);
     },
-    [referenceVideoRef, sendVoiceCommand],
+    [referenceVideoRef, sendVoiceCommand, speakImmediately],
   );
   const simulateCorrectMotion = useCallback(async () => {
     const currentSession = sessionRef.current;
@@ -601,9 +735,9 @@ export function useTeachingRuntime({
   useEffect(
     () => () => {
       playbackCleanupRef.current?.();
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      stopSpeech();
     },
-    [],
+    [stopSpeech],
   );
 
   return {
@@ -751,6 +885,119 @@ function numberArgument(value: unknown, fallback: number): number {
 
 function stringArgument(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+const LUMI_MAX_CHUNK_LENGTH = 28;
+const LUMI_MAX_QUEUED_CHUNKS = 8;
+const LUMI_TTS_FALLBACK_DELAY_MS = 2500;
+
+function normalizeLumiSpeech(speech: string): string {
+  return speech
+    .replace(/\s+/g, " ")
+    .replace(/([\u3002\uff01\uff1f!?;\uff1b])(?=\S)/g, "$1 ")
+    .trim();
+}
+
+function chunkLumiSpeech(speech: string): string[] {
+  const normalizedSpeech = normalizeLumiSpeech(speech);
+  if (!normalizedSpeech) return [];
+  const sentenceChunks =
+    normalizedSpeech.match(
+      /[^\u3002\uff01\uff1f!?;\uff1b]+[\u3002\uff01\uff1f!?;\uff1b]?/g,
+    ) ?? [normalizedSpeech];
+
+  return sentenceChunks
+    .flatMap(splitLongLumiSentence)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map(ensureLumiPause);
+}
+
+function splitLongLumiSentence(sentence: string): string[] {
+  const trimmed = sentence.trim();
+  if (trimmed.length <= LUMI_MAX_CHUNK_LENGTH) return [trimmed];
+
+  const commaChunks =
+    trimmed.match(/[^\u3001\uff0c,]+[\u3001\uff0c,]?/g) ?? [trimmed];
+  const chunks: string[] = [];
+  let currentChunk = "";
+  commaChunks.forEach((chunk) => {
+    const nextChunk = `${currentChunk}${chunk}`.trim();
+    if (nextChunk.length <= LUMI_MAX_CHUNK_LENGTH || !currentChunk) {
+      currentChunk = nextChunk;
+      return;
+    }
+    chunks.push(currentChunk);
+    currentChunk = chunk.trim();
+  });
+  if (currentChunk) chunks.push(currentChunk);
+  return chunks;
+}
+
+function ensureLumiPause(speech: string): string {
+  return /[\u3002\uff01\uff1f!?;\uff1b]$/.test(speech)
+    ? speech
+    : `${speech}\u3002`;
+}
+
+function limitLumiSpeechQueue(chunks: string[]): string[] {
+  return chunks.slice(-LUMI_MAX_QUEUED_CHUNKS);
+}
+
+function createLumiUtterance(
+  speech: string,
+  voice: SpeechSynthesisVoice | undefined | null,
+): SpeechSynthesisUtterance {
+  const utterance = new SpeechSynthesisUtterance(speech);
+  utterance.lang = voice?.lang ?? "zh-CN";
+  utterance.rate = 0.86;
+  utterance.pitch = 1.06;
+  utterance.volume = 1;
+  if (voice) utterance.voice = voice;
+  return utterance;
+}
+
+function releaseLumiAudio(
+  audioRef: MutableValueRef<HTMLAudioElement | null>,
+  audioUrlRef: MutableValueRef<string | null>,
+) {
+  audioRef.current?.pause();
+  audioRef.current = null;
+  if (audioUrlRef.current) {
+    URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
+  }
+}
+
+function preferredLumiVoice(
+  voices: SpeechSynthesisVoice[],
+): SpeechSynthesisVoice | undefined {
+  const chineseVoices = voices.filter((voice) =>
+    voice.lang.toLowerCase().startsWith("zh"),
+  );
+  if (chineseVoices.length === 0) return undefined;
+  return [...chineseVoices].sort(
+    (left, right) => voiceNaturalnessScore(right) - voiceNaturalnessScore(left),
+  )[0] ?? preferredChineseVoice(voices);
+}
+
+function voiceNaturalnessScore(voice: SpeechSynthesisVoice): number {
+  const name = voice.name.toLowerCase();
+  const rankedNames: Array<[string, number]> = [
+    ["xiaoxiao", 100],
+    ["xiaoyi", 96],
+    ["yunxia", 94],
+    ["xiaobei", 92],
+    ["yunxi", 88],
+    ["xiaohan", 86],
+    ["tingting", 84],
+    ["meijia", 82],
+    ["google", 78],
+    ["microsoft", 72],
+  ];
+  const matchedScore =
+    rankedNames.find(([candidate]) => name.includes(candidate))?.[1] ?? 50;
+  return matchedScore + (voice.localService ? 2 : 0);
 }
 
 function errorMessage(error: unknown): string {

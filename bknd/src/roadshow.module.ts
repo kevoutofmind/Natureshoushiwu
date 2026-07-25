@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { RouterModule } from '@nestjs/core';
 import { AiTeachingModule } from './ai-teaching/ai-teaching.module';
+import { LumiVoiceModule } from './lumi-voice';
 import { VlmCoreModule } from './vlm-core';
 
 /**
@@ -16,6 +17,7 @@ import { VlmCoreModule } from './vlm-core';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     AiTeachingModule,
+    LumiVoiceModule,
     RouterModule.register([{ path: 'api', module: VlmCoreModule }]),
   ],
 })

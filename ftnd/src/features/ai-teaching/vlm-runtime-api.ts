@@ -68,6 +68,26 @@ export async function sendTeachingAgentEvent(
   });
 }
 
+export async function synthesizeLumiSpeech(text: string): Promise<string> {
+  const response = await fetch(`${apiBaseUrl}/lumi/voice/synthesize`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'audio/mpeg, audio/wav, audio/*',
+    },
+    body: JSON.stringify({ text }),
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error(`Lumi TTS request failed (${response.status}).`);
+  }
+  const blob = await response.blob();
+  if (!blob.type.toLowerCase().startsWith('audio/')) {
+    throw new Error('Lumi TTS did not return audio.');
+  }
+  return URL.createObjectURL(blob);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
