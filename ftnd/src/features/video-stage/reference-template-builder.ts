@@ -14,10 +14,8 @@ import type {
 } from "./reference-dataset.types";
 import type { SkeletonSnapshot, VisionLandmark } from "./vision-types";
 
-const WASM_ROOT =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task";
+const WASM_ROOT = "/mediapipe/wasm";
+const MODEL_URL = "/mediapipe/models/holistic_landmarker.task";
 const UPPER_BODY_LANDMARKS = [11, 12, 13, 14, 15, 16, 23, 24] as const;
 
 export async function loadReferenceManifest(
@@ -227,8 +225,8 @@ function assembleDataset(
       expectedDurationMs: Math.max(500, endMs - startMs),
       requiredParts,
       evaluationPolicy: {
-        acceptThreshold: 0.72,
-        acceptWithHintThreshold: 0.56,
+        acceptThreshold: 0.5,
+        acceptWithHintThreshold: 0.4,
         minimumCompletionProgress: 0.62,
         minimumObservationMs: 650,
       },

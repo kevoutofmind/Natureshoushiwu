@@ -466,25 +466,8 @@ export class TeachingAgentService {
         );
       case 'RESTART_LESSON':
         session.currentMotionIndex = 0;
-        session.currentMotionId = plan.motions[0].motionId;
-        session.attemptIndex = 1;
-        session.retryCount = 0;
         session.completedMotions = [];
-        session.phase = 'PREVIEW';
-        return [
-          this.tools.command(
-            session.sessionId,
-            'PLAY_FULL_PREVIEW',
-            {
-              danceId: plan.danceId,
-              referenceVideoId: plan.referenceVideoId,
-              startMs: plan.previewStartMs,
-              endMs: plan.previewEndMs,
-              bgm: true,
-            },
-            { requiresAck: true, blocking: true },
-          ),
-        ];
+        return this.restartCurrentMotion(session, plan);
     }
   }
 

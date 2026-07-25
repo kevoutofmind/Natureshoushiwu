@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "reference-video-manifest-v1",
+  "danceId": "dance-002",
+  "title": "cloud",
+  "primaryReferenceId": "dance-002-reference",
+  "references": [
+    {
+      "referenceId": "dance-002-reference",
+      "videoUrl": "/dances/dance-002/reference.mp4",
+      "mirrored": false
+    }
+  ],
+  "extraction": {
+    "sampleFps": 10,
+    "targetMotionDurationMs": 4233,
+    "minimumMotionDurationMs": 2800,
+    "maximumMotionDurationMs": 5500
+  }
+}

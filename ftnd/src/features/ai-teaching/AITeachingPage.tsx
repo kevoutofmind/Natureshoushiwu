@@ -1,49 +1,102 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CameraswitchRoundedIcon from "@mui/icons-material/CameraswitchRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
-import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
-import GraphicEqRoundedIcon from "@mui/icons-material/GraphicEqRounded";
 import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
-import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import {
   Alert,
   Box,
   Button,
-  Chip,
-  LinearProgress,
   Stack,
   Typography,
 } from "@mui/material";
 import { useRouter } from "next/navigation";
 import { saveDraft } from "@/features/drafts/draft-store";
 import { SkeletonOverlay } from "@/features/video-stage/components/SkeletonOverlay";
+import { RecordingEffectsPicker } from "@/features/video-stage/components/RecordingEffectsPicker";
 import { useHolisticLandmarker } from "@/features/video-stage/hooks/useHolisticLandmarker";
+import { useRecordingEffectRenderer } from "@/features/video-stage/hooks/useRecordingEffectRenderer";
+import {
+  DEFAULT_BEAUTY_SETTINGS,
+  type BeautySettings,
+  type RecordingEffectId,
+} from "@/features/video-stage/recording-effects";
 import {
   averageVisibility,
   compareGeometry,
-  mirrorSkeleton,
 } from "@/features/video-stage/vision-geometry";
 import type {
   SkeletonSnapshot,
   VisionComparisonPayload,
 } from "@/features/video-stage/vision-types";
-import { VoiceControlPanel } from "@/features/voice-control";
-import { getTeachingWorkspace } from "./api";
-import TeachingSidePanel from "./components/TeachingSidePanel";
 import {
-  VlmCoachFeedback,
-  VlmProgressFeedback,
-  VlmStageFeedbackOverlay,
-} from "./components/VlmFeedbackWidgets";
+  type VoiceCommandResult,
+  VoiceControlPanel,
+} from "@/features/voice-control";
+import { getPopularDances } from "@/features/popular-dances/api";
+import { getTeachingWorkspace } from "./api";
+import FloatingAiCoach from "./components/FloatingAiCoach";
+import LumiMotionIntro from "./components/LumiMotionIntro";
+import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
+import MotionPreviewSequence from "./components/MotionPreviewSequence";
+import {
+  getMotionBreakdown,
+  type CuratedMotionBreakdown,
+} from "./motion-breakdown-api";
+import { VlmStageFeedbackOverlay } from "./components/VlmFeedbackWidgets";
 import { useVlmTeachingFeedback } from "./hooks/useVlmTeachingFeedback";
 import { useTeachingRuntime } from "./hooks/useTeachingRuntime";
+import {
+  teachingMotionClipUrl,
+  teachingMotionClipUrls,
+} from "./motion-video-catalog";
+import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
+type LessonFlowStage = "overview" | "training" | "countdown" | "evaluation" | "feedback" | "completed";
+
+interface LessonEvaluationResult {
+  passed: boolean;
+  score: number;
+  headline: string;
+  detail: string;
+}
+
+const FULL_FRAME_STREAK = 3;
+const ACTION_COUNT = 4;
+const TRAINING_PRE_FADE_MS = 360;
+const TRAINING_POST_END_FADE_MS = 420;
+const TRAINING_BLACK_GAP_MS = 1400;
+const TRAINING_FADE_IN_MS = 520;
+const EVALUATION_COUNTDOWN_SECONDS = 3;
+
+function landmarkConfidence(
+  landmark: SkeletonSnapshot["pose"][number] | undefined,
+) {
+  return landmark?.visibility ?? landmark?.presence ?? 0;
+}
+
+function handConfidence(hand: SkeletonSnapshot["leftHand"]) {
+  if (hand.length < 15) return 0;
+  return hand.reduce(
+    (sum, landmark) => sum + landmarkConfidence(landmark),
+    0,
+  ) / hand.length;
+}
+
+function hasStableFullFrame(snapshot: SkeletonSnapshot) {
+  const upperBody = [11, 12, 13, 14, 15, 16].every(
+    (index) => landmarkConfidence(snapshot.pose[index]) >= 0.35,
+  );
+  return (
+    upperBody &&
+    handConfidence(snapshot.leftHand) >= 0.3 &&
+    handConfidence(snapshot.rightHand) >= 0.3
+  );
+}
 
 function getRecordingMimeType() {
   const candidates = [
@@ -54,7 +107,17 @@ function getRecordingMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
-export default function AITeachingPage({ danceId }: { danceId?: string }) {
+export default function AITeachingPage({
+  danceId,
+  selectedDanceId,
+  danceTitle,
+  onboarding = false,
+}: {
+  danceId?: string;
+  selectedDanceId?: string;
+  danceTitle?: string;
+  onboarding?: boolean;
+}) {
   const activeDanceId = danceId ?? "dance-001";
   const roadshowMode = process.env.NEXT_PUBLIC_ROADSHOW_MODE === "true";
   const router = useRouter();
@@ -67,6 +130,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   const previewUrlRef = useRef<string | null>(null);
   const referenceUrlRef = useRef<string | null>(null);
   const animationRef = useRef<number | null>(null);
+  const fullFrameStreakRef = useRef(0);
   const {
     load: loadVision,
     detect,
@@ -74,9 +138,18 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     error: visionError,
   } = useHolisticLandmarker();
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
+  const [recordingEffect, setRecordingEffect] =
+    useState<RecordingEffectId>("clear");
+  const [beautySettings, setBeautySettings] =
+    useState<BeautySettings>(DEFAULT_BEAUTY_SETTINGS);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
+  const [renderedReferenceUrl, setRenderedReferenceUrl] = useState("");
+  const [selectedReferenceUrl, setSelectedReferenceUrl] = useState("");
+  const [motionBreakdown, setMotionBreakdown] =
+    useState<CuratedMotionBreakdown | null>(null);
+  const [referencePlaybackTimeMs, setReferencePlaybackTimeMs] = useState(0);
   const [liveSkeleton, setLiveSkeleton] = useState<SkeletonSnapshot | null>(
     null,
   );
@@ -87,22 +160,50 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [lumiStage, setLumiStage] = useState<"intro" | "teaching">(
+    onboarding ? "intro" : "teaching",
+  );
+  const [lessonFlowStage, setLessonFlowStage] =
+    useState<LessonFlowStage>("overview");
+  const [selectedLessonEndIndex, setSelectedLessonEndIndex] = useState<number | null>(null);
+  const [trainingClipIndex, setTrainingClipIndex] = useState(0);
+  const [evaluationCountdown, setEvaluationCountdown] = useState(EVALUATION_COUNTDOWN_SECONDS);
+  const [evaluationResult, setEvaluationResult] = useState<LessonEvaluationResult | null>(null);
+  const [completedThroughIndex, setCompletedThroughIndex] = useState(-1);
+  const lessonFlowStageRef = useRef<LessonFlowStage>("overview");
+  const selectedLessonEndIndexRef = useRef<number | null>(null);
+  const trainingTimerRef = useRef<number | null>(null);
+  const trainingPreFadeTimerRef = useRef<number | null>(null);
+  const countdownTimerRef = useRef<number | null>(null);
+  const evaluationVisibleFrameCountRef = useRef(0);
+  const previousTrainingVideoUrlRef = useRef("");
+  const referenceStageRef = useRef<HTMLDivElement>(null);
+  const referenceTransitionTimerRef = useRef<number | null>(null);
+  const {
+    containerRef: effectCanvasContainerRef,
+    getRecordingStream,
+    rendererState,
+  } = useRecordingEffectRenderer({
+    sourceVideoRef: liveVideoRef,
+    sourceStreamRef: streamRef,
+    effect: recordingEffect,
+    beauty: beautySettings,
+    enabled:
+      recordingState === "camera-ready" || recordingState === "recording",
+  });
   const {
     actionIndex,
     applyFeedback,
+    clearNotVisible,
     reaction: vlmReaction,
   } = useVlmTeachingFeedback();
   const {
-    prepare: prepareTeaching,
     ingestSkeleton,
     handleVoiceResult,
-    simulateCorrectMotion,
-    sendVoiceCommand,
     runtimeStatus,
     buildProgress,
     referenceVideoUrl,
-    session: teachingSession,
-    latestSpeech,
+    activePlaybackVideoUrl,
     lessonMotions,
   } = useTeachingRuntime({
     danceId: activeDanceId,
@@ -116,31 +217,149 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     );
   }, [activeDanceId]);
 
-  const effectiveReferenceUrl = referenceVideoUrl || referenceUrl;
-  const motionCount = lessonMotions.length;
-  const completedMotionCount = teachingSession?.completedMotions.length ?? 0;
-  const currentMotionNumber = teachingSession
-    ? Math.min(teachingSession.currentMotionIndex + 1, Math.max(1, motionCount))
-    : 0;
-  const currentInstruction = teachingSession
-    ? lessonMotions[teachingSession.currentMotionIndex]?.instruction
-    : undefined;
-  const lessonProgress =
-    teachingSession?.phase === "COMPLETED"
-      ? 100
-      : motionCount > 0
-        ? Math.round((completedMotionCount / motionCount) * 100)
-        : 0;
-  const phaseLabel = teachingSession
-    ? {
-        PREVIEW: "熟悉整舞",
-        MOTION_DEMO: "老师示范",
-        PRACTICE: "轮到你练",
-        FULL_CHALLENGE: "连贯挑战",
-        PAUSED: "稍作休息",
-        COMPLETED: "本次完成",
-      }[teachingSession.phase]
-    : "尚未开始";
+  useEffect(() => {
+    let active = true;
+    getPopularDances()
+      .then((response) => {
+        const selectedDance = response.data.items.find(
+          (item) => (item.runtimeDanceId ?? item.id) === activeDanceId,
+        );
+        if (active) setSelectedReferenceUrl(selectedDance?.coverUrl ?? "");
+      })
+      .catch(() => {
+        if (active) setSelectedReferenceUrl("");
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeDanceId]);
+
+  useEffect(() => {
+    let active = true;
+    getMotionBreakdown(activeDanceId)
+      .then((breakdown) => {
+        if (active) setMotionBreakdown(breakdown);
+      })
+      .catch(() => {
+        if (active) setMotionBreakdown(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeDanceId]);
+
+  const overviewReferenceUrl =
+    referenceUrl || referenceVideoUrl || `/dances/${activeDanceId}/reference.mp4` || selectedReferenceUrl;
+  const motionClipUrls = useMemo(
+    () => teachingMotionClipUrls(activeDanceId),
+    [activeDanceId],
+  );
+  const selectedMotionEnd = selectedLessonEndIndex ?? 0;
+  const currentMotionUrl =
+    motionClipUrls[Math.min(trainingClipIndex, selectedMotionEnd)] ??
+    teachingMotionClipUrl(activeDanceId, 0) ??
+    "";
+  const displayReferenceUrl =
+    lessonFlowStage === "overview" || lessonFlowStage === "completed"
+      ? overviewReferenceUrl
+      : currentMotionUrl || activePlaybackVideoUrl || overviewReferenceUrl;
+  const playbackReferenceUrl = renderedReferenceUrl || displayReferenceUrl;
+  const activeMotionForCards =
+    lessonFlowStage === "overview" || lessonFlowStage === "completed"
+      ? null
+      : trainingClipIndex;
+  const motionLabels = useMemo(
+    () =>
+      Array.from({ length: ACTION_COUNT }, (_, index) =>
+        motionBreakdown?.motions[index]?.label || `动作 ${index + 1}`,
+      ),
+    [motionBreakdown],
+  );
+  const currentMotionLabel = motionLabels[trainingClipIndex] ?? "当前动作";
+  const selectedLessonLabel = `1-${selectedMotionEnd + 1}`;
+  const phaseLabel = {
+    overview: "主界面",
+    training: "训练阶段",
+    countdown: "准备评估",
+    evaluation: "评估中",
+    feedback: "评估反馈",
+    completed: "完成教学",
+  }[lessonFlowStage];
+  const coachSpeech = (() => {
+    if (lessonFlowStage === "overview") {
+      return completedThroughIndex >= 0
+        ? `第 ${completedThroughIndex + 1} 关已经通过，可以选择下一个动作继续。`
+        : "点击任意动作开始教学。选第几个动作，就练习从 1 到它的动作组合。";
+    }
+    if (lessonFlowStage === "training") {
+      return `正在训练第 ${selectedLessonLabel} 个动作组合。看左侧 ${currentMotionLabel}，学会后说“我学会了”进入评估。`;
+    }
+    if (lessonFlowStage === "countdown") {
+      return `准备好，${evaluationCountdown} 秒后跟着左侧视频完整跳一遍。`;
+    }
+    if (lessonFlowStage === "evaluation") {
+      return `跟住视频，把第 ${selectedLessonLabel} 个动作组合连起来。`;
+    }
+    if (lessonFlowStage === "feedback" && evaluationResult) {
+      return evaluationResult.passed
+        ? "很稳，这一关通过了。"
+        : "这次还差一点，可以跳过回主界面，也可以直接从训练阶段再来。";
+    }
+    return "四个动作都完成了，可以开始录制你的完整版本。";
+  })();
+
+  useEffect(() => {
+    const stage = referenceStageRef.current;
+    if (referenceTransitionTimerRef.current) {
+      window.clearTimeout(referenceTransitionTimerRef.current);
+      referenceTransitionTimerRef.current = null;
+    }
+
+    if (!displayReferenceUrl) return;
+
+    if (lessonFlowStage !== "training") {
+      previousTrainingVideoUrlRef.current = "";
+      stage?.classList.remove("is-video-fading-half", "is-video-fading-out", "is-video-transitioning");
+      referenceTransitionTimerRef.current = window.setTimeout(() => {
+        setRenderedReferenceUrl(displayReferenceUrl);
+        referenceTransitionTimerRef.current = null;
+      }, 0);
+      return;
+    }
+
+    if (previousTrainingVideoUrlRef.current === displayReferenceUrl) return;
+    const isFirstTrainingClip = previousTrainingVideoUrlRef.current === "";
+    previousTrainingVideoUrlRef.current = displayReferenceUrl;
+
+    if (isFirstTrainingClip) {
+      referenceTransitionTimerRef.current = window.setTimeout(() => {
+        setRenderedReferenceUrl(displayReferenceUrl);
+        stage?.classList.add("is-video-transitioning");
+        referenceTransitionTimerRef.current = window.setTimeout(() => {
+          stage?.classList.remove("is-video-transitioning");
+          referenceTransitionTimerRef.current = null;
+        }, TRAINING_FADE_IN_MS);
+      }, 0);
+      return;
+    }
+
+    const alreadyFadedOut = stage?.classList.contains("is-video-fading-out") ?? false;
+    stage?.classList.remove("is-video-transitioning");
+    stage?.classList.add("is-video-fading-out");
+    referenceTransitionTimerRef.current = window.setTimeout(() => {
+      setRenderedReferenceUrl(displayReferenceUrl);
+      stage?.classList.remove("is-video-fading-half", "is-video-fading-out");
+      stage?.classList.add("is-video-transitioning");
+      referenceTransitionTimerRef.current = window.setTimeout(() => {
+        stage?.classList.remove("is-video-transitioning");
+        referenceTransitionTimerRef.current = null;
+      }, TRAINING_FADE_IN_MS);
+    }, alreadyFadedOut ? 0 : TRAINING_POST_END_FADE_MS);
+  }, [displayReferenceUrl, lessonFlowStage]);
+  useEffect(() => {
+    lessonFlowStageRef.current = lessonFlowStage;
+    selectedLessonEndIndexRef.current = selectedLessonEndIndex;
+  }, [lessonFlowStage, selectedLessonEndIndex]);
 
   useEffect(
     () => () => {
@@ -158,6 +377,12 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
         URL.revokeObjectURL(referenceUrlRef.current);
       }
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (trainingTimerRef.current) window.clearTimeout(trainingTimerRef.current);
+      if (trainingPreFadeTimerRef.current)
+        window.clearTimeout(trainingPreFadeTimerRef.current);
+      if (countdownTimerRef.current) window.clearTimeout(countdownTimerRef.current);
+      if (referenceTransitionTimerRef.current)
+        window.clearTimeout(referenceTransitionTimerRef.current);
     },
     [],
   );
@@ -186,6 +411,17 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
         if (result) {
           setLiveSkeleton(result);
           ingestSkeleton(result);
+          if (hasStableFullFrame(result)) {
+            fullFrameStreakRef.current += 1;
+            if (lessonFlowStageRef.current === "evaluation") {
+              evaluationVisibleFrameCountRef.current += 1;
+            }
+            if (fullFrameStreakRef.current >= FULL_FRAME_STREAK) {
+              clearNotVisible();
+            }
+          } else {
+            fullFrameStreakRef.current = 0;
+          }
         }
       }
       if (active) animationRef.current = requestAnimationFrame(tick);
@@ -196,7 +432,14 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
       active = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [detect, ingestSkeleton, previewUrl, recordingState, visionState]);
+  }, [
+    clearNotVisible,
+    detect,
+    ingestSkeleton,
+    previewUrl,
+    recordingState,
+    visionState,
+  ]);
 
   const selectReference = (file?: File) => {
     if (!file) return;
@@ -245,7 +488,6 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
       return;
     }
 
-    const mirroredPractice = mirrorSkeleton(practiceResult);
     setReferenceSkeleton(referenceResult);
     setLiveSkeleton(practiceResult);
     const now = Date.now();
@@ -263,19 +505,19 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
       },
       practiceFrame: {
         timestampMs: practiceResult.timestampMs,
-        imageDataUrl: canvasFrame(practice, true),
+        imageDataUrl: canvasFrame(practice, false),
       },
       landmarks: {
         reference: referenceResult,
-        practice: mirroredPractice,
+        practice: practiceResult,
       },
-      measurements: compareGeometry(referenceResult, mirroredPractice),
+      measurements: compareGeometry(referenceResult, practiceResult),
       quality: {
         bodyVisibility: averageVisibility(practiceResult.pose),
         leftHandVisibility: averageVisibility(practiceResult.leftHand),
         rightHandVisibility: averageVisibility(practiceResult.rightHand),
         alignmentConfidence: 1,
-        mirrored: true,
+        mirrored: false,
       },
       metadata: {
         model: "mediapipe-holistic-landmarker",
@@ -300,7 +542,16 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const startCamera = async () => {
+  const enterTeachingFromLumi = () => {
+    const referenceVideo = referenceVideoRef.current;
+    if (referenceVideo) {
+      referenceVideo.pause();
+      referenceVideo.currentTime = 0;
+    }
+    setLumiStage("teaching");
+  };
+
+  const startCamera = useCallback(async () => {
     setError("");
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("当前浏览器不支持摄像头访问，请使用最新版 Chrome 或 Edge。");
@@ -329,10 +580,246 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     } catch {
       setError("无法打开摄像头，请检查浏览器摄像头权限。");
     }
-  };
+  }, [loadVision]);
 
+  const clearLessonTimers = useCallback(() => {
+    if (trainingTimerRef.current) {
+      window.clearTimeout(trainingTimerRef.current);
+      trainingTimerRef.current = null;
+    }
+    if (countdownTimerRef.current) {
+      window.clearTimeout(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    if (trainingPreFadeTimerRef.current) {
+      window.clearTimeout(trainingPreFadeTimerRef.current);
+      trainingPreFadeTimerRef.current = null;
+    }
+  }, []);
+
+  const startTrainingFromMotion = useCallback(
+    (motionIndex: number, startAtSelectedMotion = false) => {
+      const targetIndex = Math.min(ACTION_COUNT - 1, Math.max(0, motionIndex));
+      clearLessonTimers();
+      setError("");
+      setLumiStage("teaching");
+      setEvaluationResult(null);
+      setSelectedLessonEndIndex(targetIndex);
+      setTrainingClipIndex(startAtSelectedMotion ? targetIndex : 0);
+      setEvaluationCountdown(EVALUATION_COUNTDOWN_SECONDS);
+      setLessonFlowStage("training");
+      if (!streamRef.current) void startCamera();
+    },
+    [clearLessonTimers, startCamera],
+  );
+  const returnToOverview = useCallback(() => {
+    clearLessonTimers();
+    setLessonFlowStage("overview");
+    setSelectedLessonEndIndex(null);
+    setTrainingClipIndex(0);
+    setEvaluationResult(null);
+    setEvaluationCountdown(EVALUATION_COUNTDOWN_SECONDS);
+    referenceVideoRef.current?.play().catch(() => undefined);
+  }, [clearLessonTimers]);
+
+  const retryCurrentTraining = useCallback(() => {
+    const targetIndex = selectedLessonEndIndexRef.current ?? selectedMotionEnd;
+    startTrainingFromMotion(targetIndex);
+  }, [selectedMotionEnd, startTrainingFromMotion]);
+
+  const beginEvaluation = useCallback(() => {
+    if (selectedLessonEndIndexRef.current == null) {
+      setError("请先选择一个动作开始训练。");
+      return;
+    }
+    clearLessonTimers();
+    setError("");
+    setEvaluationResult(null);
+    setTrainingClipIndex(0);
+    setEvaluationCountdown(EVALUATION_COUNTDOWN_SECONDS);
+    evaluationVisibleFrameCountRef.current = 0;
+    setLessonFlowStage("countdown");
+    if (!streamRef.current) void startCamera();
+  }, [clearLessonTimers, startCamera]);
+
+  const finishEvaluation = useCallback(() => {
+    const targetIndex = selectedLessonEndIndexRef.current ?? selectedMotionEnd;
+    const visibleFrames = evaluationVisibleFrameCountRef.current;
+    const score = Math.min(100, Math.round(58 + visibleFrames * 3.2));
+    const passed = visibleFrames >= 8;
+    const result: LessonEvaluationResult = passed
+      ? {
+          passed: true,
+          score,
+          headline: `第 ${targetIndex + 1} 关通过`,
+          detail: "动作和镜头里的身体状态都比较稳定，可以回主界面继续下一关。",
+        }
+      : {
+          passed: false,
+          score: Math.max(35, Math.min(score, 72)),
+          headline: "这次还没过",
+          detail: "评估时没有捕捉到足够稳定的身体和双手画面。可以回到训练再看一轮，或先跳过。",
+        };
+
+    setEvaluationResult(result);
+    if (passed) {
+      const completedIndex = Math.max(completedThroughIndex, targetIndex);
+      setCompletedThroughIndex(completedIndex);
+      setSelectedLessonEndIndex(null);
+      setTrainingClipIndex(0);
+      setLessonFlowStage(completedIndex >= ACTION_COUNT - 1 ? "completed" : "overview");
+    } else {
+      setLessonFlowStage("feedback");
+    }
+  }, [completedThroughIndex, selectedMotionEnd]);
+  useEffect(() => {
+    if (lessonFlowStage !== "countdown") return;
+
+    countdownTimerRef.current = window.setInterval(() => {
+      setEvaluationCountdown((current) => {
+        if (current <= 1) {
+          if (countdownTimerRef.current) {
+            window.clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+          }
+          evaluationVisibleFrameCountRef.current = 0;
+          setTrainingClipIndex(0);
+          setLessonFlowStage("evaluation");
+          return EVALUATION_COUNTDOWN_SECONDS;
+        }
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownTimerRef.current) {
+        window.clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+      }
+    };
+  }, [lessonFlowStage]);
+  useEffect(() => {
+    const video = referenceVideoRef.current;
+    if (!video || !playbackReferenceUrl) return;
+
+    const stage = referenceStageRef.current;
+    const autoPlay =
+      lessonFlowStage === "overview" ||
+      lessonFlowStage === "completed" ||
+      lessonFlowStage === "training" ||
+      lessonFlowStage === "evaluation";
+
+    const clearTrainingPlaybackTimers = () => {
+      if (trainingTimerRef.current) {
+        window.clearTimeout(trainingTimerRef.current);
+        trainingTimerRef.current = null;
+      }
+      if (trainingPreFadeTimerRef.current) {
+        window.clearTimeout(trainingPreFadeTimerRef.current);
+        trainingPreFadeTimerRef.current = null;
+      }
+    };
+
+    const scheduleTrainingPreFade = () => {
+      if (lessonFlowStage !== "training") return;
+      if (trainingPreFadeTimerRef.current) {
+        window.clearTimeout(trainingPreFadeTimerRef.current);
+        trainingPreFadeTimerRef.current = null;
+      }
+
+      const durationMs = Number.isFinite(video.duration) && video.duration > 0
+        ? video.duration * 1000
+        : 0;
+      if (!durationMs) return;
+
+      const remainingMs = Math.max(0, durationMs - video.currentTime * 1000);
+      const fadeDelayMs = Math.max(0, remainingMs - TRAINING_PRE_FADE_MS);
+      trainingPreFadeTimerRef.current = window.setTimeout(() => {
+        stage?.classList.remove("is-video-transitioning", "is-video-fading-out");
+        stage?.classList.add("is-video-fading-half");
+        trainingPreFadeTimerRef.current = null;
+      }, fadeDelayMs);
+    };
+
+    const replayCurrentTrainingClip = () => {
+      clearTrainingPlaybackTimers();
+      video.currentTime = 0;
+      stage?.classList.remove("is-video-fading-half", "is-video-fading-out");
+      stage?.classList.add("is-video-transitioning");
+      void video.play().catch(() => undefined);
+      referenceTransitionTimerRef.current = window.setTimeout(() => {
+        stage?.classList.remove("is-video-transitioning");
+        referenceTransitionTimerRef.current = null;
+      }, TRAINING_FADE_IN_MS);
+      scheduleTrainingPreFade();
+    };
+
+    video.loop = lessonFlowStage === "overview" || lessonFlowStage === "completed";
+    video.muted = true;
+
+    const desiredUrl = new URL(playbackReferenceUrl, window.location.href).href;
+    if ((video.currentSrc || video.src) !== desiredUrl) {
+      video.pause();
+      video.src = playbackReferenceUrl;
+      video.load();
+    }
+    video.currentTime = 0;
+
+    if (autoPlay) {
+      void video.play().then(scheduleTrainingPreFade).catch(() => undefined);
+    } else {
+      video.pause();
+    }
+
+    const handleLoadedMetadata = () => scheduleTrainingPreFade();
+    const handlePlaying = () => scheduleTrainingPreFade();
+
+    const handleEnded = () => {
+      if (lessonFlowStage === "training") {
+        clearTrainingPlaybackTimers();
+        stage?.classList.remove("is-video-transitioning", "is-video-fading-half");
+        stage?.classList.add("is-video-fading-out");
+        trainingTimerRef.current = window.setTimeout(() => {
+          if (trainingClipIndex >= selectedMotionEnd) {
+            if (selectedMotionEnd === 0) {
+              replayCurrentTrainingClip();
+            } else {
+              setTrainingClipIndex(0);
+            }
+            return;
+          }
+          setTrainingClipIndex((current) => current + 1);
+        }, TRAINING_BLACK_GAP_MS + TRAINING_POST_END_FADE_MS);
+        return;
+      }
+
+      if (lessonFlowStage === "evaluation") {
+        if (trainingClipIndex < selectedMotionEnd) {
+          setTrainingClipIndex((current) => current + 1);
+        } else {
+          finishEvaluation();
+        }
+      }
+    };
+
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("playing", handlePlaying);
+    video.addEventListener("ended", handleEnded);
+    return () => {
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("playing", handlePlaying);
+      video.removeEventListener("ended", handleEnded);
+      clearTrainingPlaybackTimers();
+    };
+  }, [
+    finishEvaluation,
+    playbackReferenceUrl,
+    lessonFlowStage,
+    selectedMotionEnd,
+    trainingClipIndex,
+  ]);
   const startRecording = () => {
-    const stream = streamRef.current;
+    const stream = getRecordingStream();
     if (!stream || typeof MediaRecorder === "undefined") {
       setError("请先打开摄像头，或更换支持 MediaRecorder 的浏览器。");
       return;
@@ -386,6 +873,59 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     }
   };
 
+  const startRecordingFromVoice = async () => {
+    if (recorderRef.current?.state === "recording") return;
+    if (!streamRef.current) await startCamera();
+    if (streamRef.current) startRecording();
+  };
+
+  const handlePageVoiceResult = (result: VoiceCommandResult) => {
+    if (!result.accepted || !result.command.intent) return;
+
+    if (result.command.intent === "START_EVALUATION") {
+      beginEvaluation();
+      return;
+    }
+    if (result.command.intent === "SKIP_TO_OVERVIEW") {
+      returnToOverview();
+      return;
+    }
+    if (result.command.intent === "RETRY_PRACTICE") {
+      retryCurrentTraining();
+      return;
+    }
+
+    const recordingHandled = executeRecordingVoiceCommand(result, {
+      start: startRecordingFromVoice,
+      stop: stopRecording,
+    });
+    if (recordingHandled) return;
+
+    if (result.command.intent === "NEXT_ACTION") {
+      const current = selectedLessonEndIndexRef.current;
+      if (lessonFlowStage === "overview" || lessonFlowStage === "completed") {
+        startTrainingFromMotion(Math.min(ACTION_COUNT - 1, completedThroughIndex + 1), true);
+      } else if (current != null) {
+        startTrainingFromMotion(Math.min(ACTION_COUNT - 1, current + 1), true);
+      }
+      return;
+    }
+    if (result.command.intent === "PREVIOUS_ACTION") {
+      const current = selectedLessonEndIndexRef.current ?? trainingClipIndex;
+      startTrainingFromMotion(Math.max(0, current - 1), true);
+      return;
+    }
+    if (result.command.intent === "REPEAT_ACTION") {
+      retryCurrentTraining();
+      return;
+    }
+    if (result.command.intent === "RESTART_LESSON") {
+      startTrainingFromMotion(0);
+      return;
+    }
+
+    handleVoiceResult(result);
+  };
   const storeDraft = async () => {
     if (!recordedBlob) return;
     setSaving(true);
@@ -405,31 +945,8 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   };
 
   return (
-    <Box className="teaching-page">
-      <Stack
-        className="teaching-header"
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        gap={2}
-      >
-        <Typography component="h1" variant="h4" fontWeight={900}>
-          AI 教学
-        </Typography>
-        <Stack direction="row" gap={1}>
-          {danceId && <Chip label={`已选择：${danceId}`} size="small" />}
-          <Chip
-            size="small"
-            label={recordingState === "recording" ? "正在录制" : "本地录制"}
-            color={recordingState === "recording" ? "secondary" : "default"}
-            icon={
-              recordingState === "recording" ? (
-                <FiberManualRecordRoundedIcon />
-              ) : undefined
-            }
-          />
-        </Stack>
-      </Stack>
+    <Box className={`teaching-page lesson-flow-stage-${lessonFlowStage}`}>
+      <Box className="teaching-header teaching-header-spacer" aria-hidden="true" />
 
       {(visionState === "loading" || visionError) && (
         <Alert
@@ -459,82 +976,21 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
       )}
 
       <Box className="teaching-studio-workspace">
-        <Stack className="teaching-side-rail" gap={1.5}>
-          <TeachingSidePanel title="教学进度" icon={<TimelineRoundedIcon />}>
-            <Stack gap={1.2}>
-              <Typography variant="body2" color="text.secondary">
-                今天不赶进度，我们按“熟悉—拆解—连贯”三步把动作真正学会。
-              </Typography>
-              <Stack direction="row" gap={0.6} flexWrap="wrap">
-                <Chip
-                  size="small"
-                  label="① 熟悉整舞"
-                  color={
-                    teachingSession?.phase === "PREVIEW" ? "primary" : "default"
-                  }
-                />
-                <Chip
-                  size="small"
-                  label="② 拆解分段"
-                  color={
-                    teachingSession &&
-                    ["MOTION_DEMO", "PRACTICE", "PAUSED"].includes(
-                      teachingSession.phase,
-                    )
-                      ? "primary"
-                      : "default"
-                  }
-                />
-                <Chip
-                  size="small"
-                  label="③ 连贯练习"
-                  color={
-                    teachingSession &&
-                    ["FULL_CHALLENGE", "COMPLETED"].includes(
-                      teachingSession.phase,
-                    )
-                      ? "primary"
-                      : "default"
-                  }
-                />
-              </Stack>
-              <LinearProgress variant="determinate" value={lessonProgress} />
-              <Typography variant="body2" fontWeight={800}>
-                {motionCount > 0
-                  ? `已掌握 ${completedMotionCount}/${motionCount} 个动作单元`
-                  : "启动教学后，我会先为你整理动作路线。"}
-              </Typography>
-            </Stack>
-            <VlmProgressFeedback
-              actionIndex={actionIndex}
-              reaction={vlmReaction}
-            />
-          </TeachingSidePanel>
-          <TeachingSidePanel title="动作拆解" icon={<AutoAwesomeRoundedIcon />}>
-            <Stack gap={0.8}>
-              <Typography fontWeight={850}>
-                {currentMotionNumber > 0
-                  ? `当前：动作 ${currentMotionNumber}/${motionCount}`
-                  : "等待开始教学"}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {currentInstruction ??
-                  "我会把每个动作控制在约 3 秒，并告诉你这一遍只需要关注什么。"}
-              </Typography>
-            </Stack>
-            {comparison && (
-              <Stack gap={1}>
-                <Chip
-                  size="small"
-                  label={`${comparison.measurements.length} 项骨骼测量`}
-                />
-                <Typography variant="body2">
-                  已生成当前参考帧与跟练帧的结构化对齐结果。
-                </Typography>
-              </Stack>
-            )}
-          </TeachingSidePanel>
-        </Stack>
+        <aside className="motion-thumbnail-rail" aria-label="四个关键动作">
+          <MotionPreviewSequence
+            mode="compact"
+            videoUrl={overviewReferenceUrl}
+            motions={motionBreakdown?.motions}
+            activeMotionIndex={activeMotionForCards}
+            onSelectMotion={(motionIndex) =>
+              startTrainingFromMotion(
+                motionIndex,
+                lessonFlowStage === "training" || lessonFlowStage === "feedback",
+              )
+            }
+
+          />
+        </aside>
 
         <Box className="studio-layout">
           <Box className="studio-column studio-column-reference">
@@ -545,18 +1001,32 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
             </Box>
 
             <Box className="studio-screen-area studio-screen-area-reference">
-              <Box className="phone-stage reference-phone">
-                {effectiveReferenceUrl ? (
+              <Box ref={referenceStageRef} className="phone-stage reference-phone">
+                {playbackReferenceUrl ? (
                   <>
                     <video
                       ref={referenceVideoRef}
-                      src={effectiveReferenceUrl}
-                      controls
+                      src={playbackReferenceUrl}
+                      controls={lessonFlowStage !== "overview" && lessonFlowStage !== "completed"}
+                      autoPlay
+                      loop={lessonFlowStage === "overview" || lessonFlowStage === "completed"}
+                      muted
                       playsInline
                       preload="metadata"
+                      onLoadedMetadata={(event) =>
+                        setReferencePlaybackTimeMs(
+                          Math.round(event.currentTarget.currentTime * 1000),
+                        )
+                      }
+                      onTimeUpdate={(event) =>
+                        setReferencePlaybackTimeMs(
+                          Math.round(event.currentTarget.currentTime * 1000),
+                        )
+                      }
                     />
                     <SkeletonOverlay
                       snapshot={referenceSkeleton}
+                      videoRef={referenceVideoRef}
                       mirrored={false}
                     />
                   </>
@@ -571,6 +1041,15 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   reaction={vlmReaction}
                   stage="reference"
                 />
+                 {lessonFlowStage !== "overview" && lessonFlowStage !== "completed" && (
+                  <Box className="lesson-stage-badge">
+                    <span>{phaseLabel}</span>
+                    <strong>{currentMotionLabel}</strong>
+                  </Box>
+                )}
+                {lessonFlowStage === "countdown" && (
+                  <Box className="lesson-countdown">{evaluationCountdown}</Box>
+                )}
               </Box>
             </Box>
 
@@ -611,9 +1090,23 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   />
                 ) : (
                   <>
-                    <video ref={liveVideoRef} muted playsInline />
-                    <SkeletonOverlay snapshot={liveSkeleton} />
-                    {recordingState === "idle" && (
+                    <video
+                      className="camera-feed-mirrored camera-source-video"
+                      ref={liveVideoRef}
+                      muted
+                      playsInline
+                    />
+                    <Box
+                      ref={effectCanvasContainerRef}
+                      className="camera-effect-layer"
+                      aria-hidden="true"
+                    />
+                    <SkeletonOverlay
+                      snapshot={liveSkeleton}
+                      videoRef={liveVideoRef}
+                      mirrored={false}
+                    />
+                    {recordingState === "idle" && lessonFlowStage !== "completed" && (
                       <Stack className="camera-placeholder" alignItems="center">
                         <CameraswitchRoundedIcon />
                         <Typography fontWeight={800}>等待摄像头</Typography>
@@ -623,6 +1116,26 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                 )}
                 {recordingState === "recording" && (
                   <Box className="recording-indicator">REC</Box>
+                )}
+                {motionBreakdown && (
+                  <MotionBreakdownOverlay
+                    motions={motionBreakdown.motions}
+                    currentTimeMs={referencePlaybackTimeMs}
+                  />
+                )}
+                {error && <Box className="stage-error">{error}</Box>}
+                {!previewUrl && (
+                  <RecordingEffectsPicker
+                    value={recordingEffect}
+                    onChange={setRecordingEffect}
+                    beauty={beautySettings}
+                    onBeautyChange={(key, value) =>
+                      setBeautySettings((current) => ({
+                        ...current,
+                        [key]: value,
+                      }))
+                    }
+                  />
                 )}
                 <VlmStageFeedbackOverlay
                   actionIndex={actionIndex}
@@ -640,7 +1153,42 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
               gap={1.2}
               flexWrap="wrap"
             >
-              {recordingState === "idle" && (
+              {lessonFlowStage === "training" && (
+                <Button variant="contained" color="secondary" onClick={beginEvaluation}>
+                  我学会了，开始评估
+                </Button>
+              )}
+              {lessonFlowStage === "countdown" && (
+                <Button variant="contained" disabled>
+                  倒计时 {evaluationCountdown}
+                </Button>
+              )}
+              {lessonFlowStage === "feedback" && (
+                <>
+                  <Button variant="contained" onClick={returnToOverview}>
+                    回主界面
+                  </Button>
+                  <Button variant="outlined" onClick={retryCurrentTraining}>
+                    从训练再来
+                  </Button>
+                </>
+              )}
+              {lessonFlowStage === "completed" && recordingState !== "recording" && (
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={startRecordingFromVoice}
+                  startIcon={<FiberManualRecordRoundedIcon />}
+                >
+                  开始录制完整版本
+                </Button>
+              )}
+              {lessonFlowStage !== "overview" && lessonFlowStage !== "completed" && (
+                <Button variant="outlined" onClick={returnToOverview}>
+                  完整视频
+                </Button>
+              )}
+              {recordingState === "idle" && lessonFlowStage !== "completed" && (
                 <Button
                   variant="contained"
                   onClick={startCamera}
@@ -649,14 +1197,15 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   打开摄像头
                 </Button>
               )}
-              {recordingState === "camera-ready" && (
+              {recordingState === "camera-ready" && lessonFlowStage !== "completed" && (
                 <Button
                   variant="contained"
                   color="secondary"
                   onClick={startRecording}
+                  disabled={rendererState === "loading"}
                   startIcon={<FiberManualRecordRoundedIcon />}
                 >
-                  开始录制
+                  开始录制并启动 AI 教学
                 </Button>
               )}
               {recordingState === "recording" && (
@@ -687,9 +1236,10 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
               {!roadshowMode && (
                 <Button
                   variant="outlined"
+                  className="studio-development-control"
                   onClick={captureComparison}
                   disabled={
-                    !effectiveReferenceUrl ||
+                    !playbackReferenceUrl ||
                     visionState !== "ready" ||
                     recordingState === "idle" ||
                     Boolean(previewUrl)
@@ -703,70 +1253,34 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   导出 JSON
                 </Button>
               )}
-              <Button
-                variant="contained"
-                onClick={() => void prepareTeaching()}
-                disabled={runtimeStatus.state === "preparing-dataset"}
-              >
-                {runtimeStatus.state === "preparing-dataset"
-                  ? "正在准备参考模板"
-                  : "启动 AI 教学"}
-              </Button>
-              {teachingSession?.phase === "PREVIEW" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void sendVoiceCommand("READY")}
-                >
-                  我已熟悉，直接拆动作
-                </Button>
-              )}
-              {teachingSession?.phase === "MOTION_DEMO" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void sendVoiceCommand("READY")}
-                >
-                  我准备好了，开始练
-                </Button>
-              )}
-              {roadshowMode && teachingSession?.phase === "PRACTICE" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void simulateCorrectMotion()}
-                >
-                  无摄像头：模拟正确动作
-                </Button>
-              )}
+              <Box className="studio-voice-control">
+                <VoiceControlPanel
+                  autoListen={lessonFlowStage === "training"}
+                  onCommandRecognized={handlePageVoiceResult}
+                />
+              </Box>
             </Stack>
           </Box>
         </Box>
 
-        <Stack className="teaching-side-rail" gap={1.5}>
-          <TeachingSidePanel title="AI 教练" icon={<ForumRoundedIcon />}>
-            <VlmCoachFeedback
-              actionIndex={actionIndex}
-              reaction={vlmReaction}
-            />
-            <Typography variant="body2" mt={1}>
-              {latestSpeech ||
-                "你好，我会陪你一步一步来。你随时可以说“慢一点”“再教我一次”或“我准备好了”，学习节奏由你决定。"}
-            </Typography>
-            {teachingSession && (
-              <Chip
-                size="small"
-                sx={{ mt: 1 }}
-                label={`${phaseLabel} · 动作 ${currentMotionNumber}/${motionCount}`}
-              />
-            )}
-          </TeachingSidePanel>
-          <TeachingSidePanel title="语音控制" icon={<GraphicEqRoundedIcon />}>
-            <Stack gap={1}>
-              <Typography variant="body2" color="text.secondary">
-                点击后会持续监听；没有麦克风时也可以在弹窗中输入文字测试。
-              </Typography>
-              <VoiceControlPanel onCommandRecognized={handleVoiceResult} />
-            </Stack>
-          </TeachingSidePanel>
-        </Stack>
+        {lumiStage === "teaching" && (
+          <FloatingAiCoach
+            introOpen={false}
+            danceTitle={danceTitle ?? selectedDanceId ?? activeDanceId}
+            motions={lessonMotions}
+            phaseLabel={phaseLabel}
+            speech={coachSpeech}
+            review={evaluationResult}
+            onFinishIntro={() => undefined}
+          />
+        )}
+        {lumiStage === "intro" && (
+          <LumiMotionIntro
+            danceId={selectedDanceId ?? activeDanceId}
+            motions={motionBreakdown?.motions}
+            onStart={enterTeachingFromLumi}
+          />
+        )}
       </Box>
     </Box>
   );

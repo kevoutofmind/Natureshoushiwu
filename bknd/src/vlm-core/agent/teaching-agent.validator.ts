@@ -33,6 +33,16 @@ export class TeachingAgentValidator {
       this.nonEmpty(motion.motionId, `motions.${index}.motionId`);
       this.nonEmpty(motion.instruction, `motions.${index}.instruction`);
       this.timeRange(motion.demoStartMs, motion.demoEndMs, `motions.${index}`);
+      if (motion.semantic) {
+        this.nonEmpty(motion.semantic.label, `motions.${index}.semantic.label`);
+        if (
+          !Array.isArray(motion.semantic.steps) ||
+          motion.semantic.steps.length === 0 ||
+          motion.semantic.steps.some((step) => !step.trim())
+        ) {
+          this.fail(`motions.${index}.semantic.steps`, '至少需要一条非空动作步骤');
+        }
+      }
       if (motionIds.has(motion.motionId)) {
         this.fail(`motions.${index}.motionId`, '动作单元ID不能重复');
       }

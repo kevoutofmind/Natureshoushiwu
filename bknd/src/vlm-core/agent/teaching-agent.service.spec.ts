@@ -252,6 +252,74 @@ describe('TeachingAgentService', () => {
     expect(state.version).toBe(1);
   });
 
+  it('restarts voice navigation from the first motion clip', () => {
+    const { agent } = setup(['motion-001', 'motion-002', 'motion-003']);
+    agent.startSession({
+      schemaVersion: 'teaching-agent-start-v1',
+      sessionId: 'agent-session-voice-navigation',
+      danceId: 'dance-001',
+    });
+
+    const advanced = agent.handleEvent({
+      schemaVersion: 'teaching-agent-event-v1',
+      sessionId: 'agent-session-voice-navigation',
+      eventId: 'voice-next-motion',
+      type: 'VOICE_COMMAND',
+      command: 'NEXT_ACTION',
+      expectedVersion: 0,
+    });
+    expect(advanced.session.currentMotionIndex).toBe(1);
+
+    const repeated = agent.handleEvent({
+      schemaVersion: 'teaching-agent-event-v1',
+      sessionId: 'agent-session-voice-navigation',
+      eventId: 'voice-repeat-motion',
+      type: 'VOICE_COMMAND',
+      command: 'REPEAT_ACTION',
+      expectedVersion: 1,
+    });
+    expect(repeated.session.currentMotionIndex).toBe(1);
+    expect(repeated.commands.map((command) => command.tool)).toContain(
+      'PLAY_MOTION_DEMO',
+    );
+
+    const previous = agent.handleEvent({
+      schemaVersion: 'teaching-agent-event-v1',
+      sessionId: 'agent-session-voice-navigation',
+      eventId: 'voice-previous-motion',
+      type: 'VOICE_COMMAND',
+      command: 'PREVIOUS_ACTION',
+      expectedVersion: 2,
+    });
+    expect(previous.session.currentMotionIndex).toBe(0);
+
+    agent.handleEvent({
+      schemaVersion: 'teaching-agent-event-v1',
+      sessionId: 'agent-session-voice-navigation',
+      eventId: 'voice-next-before-restart',
+      type: 'VOICE_COMMAND',
+      command: 'NEXT_ACTION',
+      expectedVersion: 3,
+    });
+
+    const restarted = agent.handleEvent({
+      schemaVersion: 'teaching-agent-event-v1',
+      sessionId: 'agent-session-voice-navigation',
+      eventId: 'voice-restart-first-motion',
+      type: 'VOICE_COMMAND',
+      command: 'RESTART_LESSON',
+      expectedVersion: 4,
+    });
+    expect(restarted.session.currentMotionIndex).toBe(0);
+    expect(restarted.session.currentMotionId).toBe('motion-001');
+    expect(restarted.commands.map((command) => command.tool)).toContain(
+      'PLAY_MOTION_DEMO',
+    );
+    expect(restarted.commands.map((command) => command.tool)).not.toContain(
+      'PLAY_FULL_PREVIEW',
+    );
+  });
+
   it('lets the learner skip preview and decide when practice starts', () => {
     const { agent } = setup(['motion-001']);
     agent.startSession({

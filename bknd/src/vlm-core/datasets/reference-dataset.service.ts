@@ -13,6 +13,7 @@ import type {
   ReferenceDatasetSummary,
 } from '../contracts/reference-dataset.types';
 import { VlmCoreService } from '../vlm-core.service';
+import { ReferenceDatasetRepository } from './reference-dataset.repository';
 
 @Injectable()
 export class ReferenceDatasetService implements OnModuleInit {
@@ -25,9 +26,21 @@ export class ReferenceDatasetService implements OnModuleInit {
   constructor(
     private readonly vlmCore: VlmCoreService,
     private readonly teachingAgent: TeachingAgentService,
+    private readonly repository: ReferenceDatasetRepository,
   ) {}
 
   async onModuleInit(): Promise<void> {
+    const databaseDatasets = await this.loadDatabaseDatasets();
+    if (databaseDatasets.length > 0) {
+      for (const dataset of databaseDatasets) {
+        await this.register(dataset, false);
+        this.logger.log(
+          `Loaded reference dataset ${dataset.danceId} from PostgreSQL`,
+        );
+      }
+      return;
+    }
+
     let danceDirectories: string[];
     try {
       danceDirectories = await readdir(this.dataRoot);
@@ -45,7 +58,7 @@ export class ReferenceDatasetService implements OnModuleInit {
           await readFile(datasetFile, 'utf8'),
         ) as ReferenceDanceDataset;
         await this.register(parsed, false);
-        this.logger.log(`Loaded reference dataset ${danceId}`);
+        this.logger.log(`Loaded reference dataset ${danceId} from local JSON`);
       } catch (error: unknown) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
           this.logger.warn(
@@ -76,6 +89,7 @@ export class ReferenceDatasetService implements OnModuleInit {
         `${JSON.stringify(dataset, null, 2)}\n`,
         'utf8',
       );
+      await this.repository.upsert(dataset);
     }
 
     return {
@@ -104,6 +118,18 @@ export class ReferenceDatasetService implements OnModuleInit {
 
   private datasetFile(danceId: string): string {
     return join(this.dataRoot, danceId, 'processed', 'dataset.json');
+  }
+
+  private async loadDatabaseDatasets(): Promise<ReferenceDanceDataset[]> {
+    if (!this.repository.configured) return [];
+    try {
+      return await this.repository.list();
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Unable to load reference datasets from PostgreSQL; falling back to local JSON: ${String(error)}`,
+      );
+      return [];
+    }
   }
 
   private validate(dataset: ReferenceDanceDataset): void {

@@ -17,6 +17,7 @@ import { RealtimeJudgeValidator } from './validation/realtime-judge.validator';
 import { VlmCoreController } from './vlm-core.controller';
 import { VlmCoreService } from './vlm-core.service';
 import { ReferenceDatasetService } from './datasets/reference-dataset.service';
+import { ReferenceDatasetRepository } from './datasets/reference-dataset.repository';
 
 @Module({
   controllers: [VlmCoreController, TeachingAgentController],
@@ -38,6 +39,7 @@ import { ReferenceDatasetService } from './datasets/reference-dataset.service';
     },
     VlmCoreService,
     TeachingAgentService,
+    ReferenceDatasetRepository,
     ReferenceDatasetService,
   ],
   exports: [

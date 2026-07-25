@@ -1,4 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  EnvHttpProxyAgent,
+  fetch as undiciFetch,
+  type Dispatcher,
+} from 'undici';
 import { SIMPLE_VOICE_COMMAND_INTENTS } from './contracts/voice-command.types';
 import type {
   SimpleVoiceCommandIntent,
@@ -9,6 +14,7 @@ import {
   KIMI_VOICE_ROUTER_PROMPT_VERSION,
   KIMI_VOICE_ROUTER_SYSTEM_PROMPT,
 } from './prompts/kimi-voice-router.prompt';
+import { nearestPlaybackRateStep } from './voice-command-keywords';
 
 interface KimiChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
@@ -20,11 +26,12 @@ export class KimiVoiceCommandRouterService {
   private readonly apiKey = process.env.KIMI_API_KEY ?? '';
   private readonly apiUrl =
     process.env.KIMI_API_URL ?? 'https://api.moonshot.cn/v1/chat/completions';
-  private readonly model = process.env.KIMI_MODEL ?? 'kimi-k2.6';
+  private readonly model = process.env.KIMI_MODEL ?? 'moonshot-v1-8k';
   private readonly timeoutMs = positiveInteger(
     process.env.KIMI_VOICE_TIMEOUT_MS,
-    3000,
+    12000,
   );
+  private readonly dispatcher = createProxyDispatcher();
 
   get configured(): boolean {
     return Boolean(this.apiKey && this.apiUrl && this.model);
@@ -39,7 +46,7 @@ export class KimiVoiceCommandRouterService {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await fetch(this.apiUrl, {
+      const requestInit: RequestInit = {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
@@ -47,8 +54,7 @@ export class KimiVoiceCommandRouterService {
         },
         body: JSON.stringify({
           model: this.model,
-          thinking: { type: 'disabled' },
-          max_tokens: 180,
+          max_tokens: 300,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: KIMI_VOICE_ROUTER_SYSTEM_PROMPT },
@@ -62,9 +68,21 @@ export class KimiVoiceCommandRouterService {
           ],
         }),
         signal: controller.signal,
-      });
+      };
+      const response =
+        process.env.NODE_ENV === 'test'
+          ? await globalThis.fetch(this.apiUrl, requestInit)
+          : await undiciFetch(this.apiUrl, {
+              ...(requestInit as unknown as NonNullable<
+                Parameters<typeof undiciFetch>[1]
+              >),
+              dispatcher: this.dispatcher,
+            });
       if (!response.ok) {
-        this.logger.warn(`Kimi voice routing returned HTTP ${response.status}`);
+        const responseBody = (await response.text()).slice(0, 500);
+        this.logger.warn(
+          `Kimi voice routing returned HTTP ${response.status}: ${responseBody}`,
+        );
         return null;
       }
 
@@ -78,7 +96,7 @@ export class KimiVoiceCommandRouterService {
       );
     } catch (error: unknown) {
       this.logger.warn(
-        `Kimi voice routing failed; local controls remain available: ${errorName(error)}`,
+        `Kimi voice routing failed; local controls remain available: ${errorDetails(error)}`,
       );
       return null;
     } finally {
@@ -91,20 +109,42 @@ export class KimiVoiceCommandRouterService {
     normalizedTranscript: string,
     data: Record<string, unknown>,
   ): VoiceCommandResponse | null {
-    const intent = this.parseIntent(data.intent);
     const confidence = boundedNumber(data.confidence, 0, 1) ?? 0;
+    const responseText =
+      typeof data.responseText === 'string' && data.responseText.trim()
+        ? data.responseText.trim().slice(0, 160)
+        : '我在陪着你，按自己的节奏来就好。';
+
+    if (data.intent === null) {
+      return {
+        success: true,
+        code: 'VOICE_COMMAND_NOT_RECOGNIZED',
+        message: 'Kimi 已生成 Lumi 陪伴回应。',
+        data: {
+          accepted: false,
+          command: {
+            transcript,
+            normalizedTranscript,
+            intent: null,
+            confidence,
+            parameters: {},
+          },
+          label: 'Lumi 陪伴回应',
+          responseText,
+          executionStatus: 'not-dispatched',
+        },
+      };
+    }
+
+    const intent = this.parseIntent(data.intent);
     if (!intent || confidence < 0.65) return null;
 
     const parameters: VoiceCommandParameters = {};
     const seconds = boundedNumber(data.seconds, 0.5, 30);
     if (seconds !== undefined) parameters.seconds = seconds;
     const playbackRate = boundedNumber(data.playbackRate, 0.25, 2);
-    if (playbackRate !== undefined) parameters.playbackRate = playbackRate;
-    const responseText =
-      typeof data.responseText === 'string' && data.responseText.trim()
-        ? data.responseText.trim().slice(0, 100)
-        : '好的，我明白你的意思了。';
-
+    if (playbackRate !== undefined)
+      parameters.playbackRate = nearestPlaybackRateStep(playbackRate);
     return {
       success: true,
       code: 'VOICE_COMMAND_RECOGNIZED',
@@ -118,7 +158,7 @@ export class KimiVoiceCommandRouterService {
           confidence,
           parameters,
         },
-        label: '自然语言教学指令',
+        label: intent === 'COACH_QUESTION' ? 'AI 教练答疑' : '自然语言教学指令',
         responseText,
         executionStatus: 'not-dispatched',
       },
@@ -155,6 +195,34 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function errorName(error: unknown): string {
-  return error instanceof Error ? error.name : 'unknown-error';
+function createProxyDispatcher(): Dispatcher | undefined {
+  const explicitProxy = process.env.KIMI_PROXY_URL?.trim();
+  if (explicitProxy) {
+    return new EnvHttpProxyAgent({
+      httpProxy: explicitProxy,
+      httpsProxy: explicitProxy,
+    });
+  }
+  return hasProxyEnvironment() ? new EnvHttpProxyAgent() : undefined;
+}
+
+function hasProxyEnvironment(): boolean {
+  return Boolean(
+    process.env.HTTPS_PROXY ??
+    process.env.https_proxy ??
+    process.env.HTTP_PROXY ??
+    process.env.http_proxy ??
+    process.env.ALL_PROXY ??
+    process.env.all_proxy,
+  );
+}
+
+function errorDetails(error: unknown): string {
+  if (!(error instanceof Error)) return 'unknown-error';
+  const cause = error.cause;
+  if (cause instanceof Error) {
+    const code = 'code' in cause ? String(cause.code) : cause.name;
+    return `${error.name}: ${error.message}; cause=${code}: ${cause.message}`;
+  }
+  return `${error.name}: ${error.message}`;
 }

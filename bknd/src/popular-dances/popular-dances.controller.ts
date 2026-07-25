@@ -9,7 +9,7 @@ export class PopularDancesController {
 
   @ApiOperation({ summary: '获取热门手势舞列表' })
   @ApiOkResponse({
-    description: '返回已经导入的热门手势舞；当前数据库为空。',
+    description: '返回已经导入的热门手势舞类别与主示例视频。',
     schema: {
       example: {
         success: true,

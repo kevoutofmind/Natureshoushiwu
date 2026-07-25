@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendor-generated MediaPipe bootstrap files are served as static assets.
+    "public/mediapipe/wasm/**",
   ]),
 ]);
 

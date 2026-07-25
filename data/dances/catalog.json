@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "dance-catalog-v1",
+  "categories": [
+    {
+      "danceId": "dance-001",
+      "title": "cat",
+      "sourceFileName": "cat (1).mp4",
+      "referenceVideoUrl": "/dances/dance-001/reference.mp4",
+      "referenceSkeletonPath": "data/dances/dance-001/reference/skeleton.json",
+      "durationSeconds": 19,
+      "sortOrder": 1,
+      "variantCapacity": 10,
+      "analysisStatus": "PENDING_ANALYSIS"
+    },
+    {
+      "danceId": "dance-002",
+      "title": "cloud",
+      "sourceFileName": "cloud.mp4",
+      "referenceVideoUrl": "/dances/dance-002/reference.mp4",
+      "referenceSkeletonPath": "data/dances/dance-002/reference/skeleton.json",
+      "durationSeconds": 17,
+      "sortOrder": 2,
+      "variantCapacity": 10,
+      "analysisStatus": "PENDING_ANALYSIS"
+    },
+    {
+      "danceId": "dance-003",
+      "title": "fade",
+      "sourceFileName": "fade.mp4",
+      "referenceVideoUrl": "/dances/dance-003/reference.mp4",
+      "referenceSkeletonPath": "data/dances/dance-003/reference/skeleton.json",
+      "durationSeconds": 11,
+      "sortOrder": 3,
+      "variantCapacity": 10,
+      "analysisStatus": "PENDING_ANALYSIS"
+    },
+    {
+      "danceId": "dance-004",
+      "title": "fight",
+      "sourceFileName": "fight (1).mp4",
+      "referenceVideoUrl": "/dances/dance-004/reference.mp4",
+      "referenceSkeletonPath": "data/dances/dance-004/reference/skeleton.json",
+      "durationSeconds": 11,
+      "sortOrder": 4,
+      "variantCapacity": 10,
+      "analysisStatus": "PENDING_ANALYSIS"
+    },
+    {
+      "danceId": "dance-005",
+      "title": "indo",
+      "sourceFileName": "indo.mp4",
+      "referenceVideoUrl": "/dances/dance-005/reference.mp4",
+      "referenceSkeletonPath": "data/dances/dance-005/reference/skeleton.json",
+      "durationSeconds": 9,
+      "sortOrder": 5,
+      "variantCapacity": 10,
+      "analysisStatus": "PENDING_ANALYSIS"
+    },
+    {
+      "danceId": "dance-006",
+      "title": "no",
+      "sourceFileName": "no.mp4",
+      "referenceVideoUrl": "/dances/dance-006/reference.mp4",
+      "referenceSkeletonPath": "data/dances/dance-006/reference/skeleton.json",
+      "durationSeconds": 16,
+      "sortOrder": 6,
+      "variantCapacity": 10,
+      "analysisStatus": "PENDING_ANALYSIS"
+    }
+  ]
+}

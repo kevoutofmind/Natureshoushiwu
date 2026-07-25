@@ -1,0 +1,2 @@
+# MediaPipe publishes these generated runtime files with intentional trailing whitespace.
+ftnd/public/mediapipe/wasm/*.js -whitespace

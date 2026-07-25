@@ -11,6 +11,7 @@ import { MediaAssetsModule } from './media-assets';
 import { PopularDancesModule } from './popular-dances/popular-dances.module';
 import { UsersModule } from './users/users.module';
 import { VlmCoreModule } from './vlm-core';
+import { VideoStageModule } from './video-stage';
 import { VoiceControlModule } from './voice-control';
 
 @Module({
@@ -24,6 +25,7 @@ import { VoiceControlModule } from './voice-control';
     AiTeachingModule,
     DraftsModule,
     VoiceControlModule,
+    VideoStageModule,
     VlmCoreModule,
     RouterModule.register([{ path: 'api', module: VlmCoreModule }]),
   ],

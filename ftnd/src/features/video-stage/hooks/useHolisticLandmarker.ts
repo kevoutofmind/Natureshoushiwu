@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilesetResolver, HolisticLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 import type { SkeletonSnapshot } from '../vision-types';
-const WASM_ROOT = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
-const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task';
+const WASM_ROOT = '/mediapipe/wasm';
+const MODEL_URL = '/mediapipe/models/holistic_landmarker.task';
 const copy = (p: NormalizedLandmark[] | undefined) => (p ?? []).map(({ x, y, z, visibility }) => ({ x, y, z, visibility }));
 export function useHolisticLandmarker() {
   const instance = useRef<HolisticLandmarker | null>(null);

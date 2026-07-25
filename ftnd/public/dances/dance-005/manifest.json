@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "reference-video-manifest-v1",
+  "danceId": "dance-005",
+  "title": "indo",
+  "primaryReferenceId": "dance-005-reference",
+  "references": [
+    {
+      "referenceId": "dance-005-reference",
+      "videoUrl": "/dances/dance-005/reference.mp4",
+      "mirrored": false
+    }
+  ],
+  "extraction": {
+    "sampleFps": 10,
+    "targetMotionDurationMs": 2367,
+    "minimumMotionDurationMs": 1600,
+    "maximumMotionDurationMs": 3100
+  }
+}

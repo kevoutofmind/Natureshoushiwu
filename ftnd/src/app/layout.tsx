@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import RefreshToWelcome from '@/components/RefreshToWelcome';
 
 export const metadata: Metadata = {
   title: 'MOVE / MATCH · AI 手势舞教学',
@@ -13,7 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <RefreshToWelcome />
+        {children}
+      </body>
     </html>
   );
 }

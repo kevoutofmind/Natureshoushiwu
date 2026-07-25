@@ -41,12 +41,9 @@ const navigation = [
     path: '/teaching',
     icon: <AutoAwesomeRoundedIcon fontSize="small" />,
   },
-  {
-    label: '草稿箱',
-    path: '/drafts',
-    icon: <VideoLibraryRoundedIcon fontSize="small" />,
-  },
 ];
+
+const LOCAL_DEMO_ACCESS_TOKEN = 'local-demo-session';
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -74,7 +71,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       const storedSession = readSession();
       if (!storedSession) {
-        router.replace('/login');
+        setSession({
+          accessToken: LOCAL_DEMO_ACCESS_TOKEN,
+          user: {
+            id: 'local-demo-user',
+            email: '体验用户',
+            createdAt: new Date(0).toISOString(),
+          },
+        });
+        setChecked(true);
+        return;
+      }
+
+      if (storedSession.accessToken === LOCAL_DEMO_ACCESS_TOKEN) {
+        setSession(storedSession);
+        setChecked(true);
         return;
       }
 
@@ -174,6 +185,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   />
                 ))}
               </Tabs>
+
+              <Tooltip title="草稿箱">
+                <IconButton
+                  className="workspace-draft-orb"
+                  onClick={() => router.push('/drafts')}
+                  aria-label="打开草稿箱"
+                >
+                  <VideoLibraryRoundedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
 
               <Stack
                 direction="row"
