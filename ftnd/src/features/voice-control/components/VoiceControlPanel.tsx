@@ -28,6 +28,9 @@ export default function VoiceControlPanel({
   onCommandRecognized,
 }: VoiceControlPanelProps) {
   const autoStartedRef = useRef(false);
+  const requestQueueRef = useRef(Promise.resolve());
+  const pendingRequestCountRef = useRef(0);
+  const [manuallyPaused, setManuallyPaused] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [lastResult, setLastResult] = useState<VoiceCommandResult | null>(null);
@@ -60,22 +63,33 @@ export default function VoiceControlPanel({
         onCommandRecognized?.(localResult);
         return;
       }
+      pendingRequestCountRef.current += 1;
       setProcessing(true);
       setRequestError("");
 
-      try {
-        const response = await interpretVoiceCommand(trimmedTranscript);
-        setLastResult(response.data);
-        onCommandRecognized?.(response.data);
-      } catch (reason) {
-        setRequestError(
-          reason instanceof Error
-            ? reason.message
-            : "语音指令解析服务暂时不可用。",
-        );
-      } finally {
-        setProcessing(false);
-      }
+      requestQueueRef.current = requestQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            const response = await interpretVoiceCommand(trimmedTranscript);
+            setLastResult(response.data);
+            onCommandRecognized?.(response.data);
+          } catch (reason) {
+            setRequestError(
+              reason instanceof Error
+                ? reason.message
+                : "语音指令解析服务暂时不可用。",
+            );
+          } finally {
+            pendingRequestCountRef.current = Math.max(
+              0,
+              pendingRequestCountRef.current - 1,
+            );
+            setProcessing(pendingRequestCountRef.current > 0);
+          }
+        });
+
+      await requestQueueRef.current;
     },
     [onCommandRecognized],
   );
@@ -92,19 +106,28 @@ export default function VoiceControlPanel({
   });
 
   useEffect(() => {
-    if (autoListen && isSupported && !isListening && !processing) {
+    if (
+      autoListen &&
+      !manuallyPaused &&
+      isSupported &&
+      !isListening &&
+      !processing
+    ) {
       autoStartedRef.current = true;
       startListening();
       return;
     }
-    if (!autoListen && autoStartedRef.current) {
-      autoStartedRef.current = false;
-      stopListening();
+    if (!autoListen) {
+      if (autoStartedRef.current) {
+        autoStartedRef.current = false;
+        stopListening();
+      }
     }
   }, [
     autoListen,
     isListening,
     isSupported,
+    manuallyPaused,
     processing,
     startListening,
     stopListening,
@@ -136,6 +159,7 @@ export default function VoiceControlPanel({
             }
             onClick={() => {
               autoStartedRef.current = false;
+              setManuallyPaused(false);
               if (!isListening) startListening();
             }}
             disabled={!isSupported || processing}
@@ -151,6 +175,7 @@ export default function VoiceControlPanel({
               startIcon={<StopCircleRoundedIcon />}
               onClick={() => {
                 autoStartedRef.current = false;
+                setManuallyPaused(true);
                 stopListening();
               }}
               sx={{ flexShrink: 0 }}
