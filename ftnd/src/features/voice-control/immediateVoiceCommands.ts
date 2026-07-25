@@ -11,6 +11,7 @@ export function normalizeVoiceTranscript(transcript: string): string {
   return transcript
     .trim()
     .toLowerCase()
+    .replace(/(\d)[,，](\d)/g, '$1.$2')
     .replace(/[，。！？、,!?]/g, "")
     .replace(/\s+/g, "");
 }
@@ -28,9 +29,19 @@ const fixedCommandValues = [
   "别太快", "上个动作", "下个动作", "从头开始", "重来", "暂停", "先停", "停",
 ] as const;
 
+const additionalImmediateCommandValues = [
+  '再快一点', '加快一点', '加快速度', '提高速度', '提速', '太慢了', '有点慢',
+  '再慢一点', '放慢一点', '放慢速度', '减慢速度', '降低速度', '降速',
+  '太快了', '有点快', '正常速度', '标准速度', '普通速度', '原速',
+  '一倍速', '半速',
+] as const;
+
 const secondsCommandPattern =
   "(倒回|回退|退回|往回|后退|快进|往后跳|向后跳)(\\d+(?:\\.\\d+)?|[一二两三四五六七八九十])秒";
 const playbackRateCommandPattern = "(调到|设置为?|改成)?\\d+(?:\\.\\d+)?倍(速)?";
+
+const spokenPlaybackRateCommandPattern =
+  '(调到|设置为?|改成)?([零〇一]点(?:五|七五|二五)|四分之三|半)倍(速)?';
 
 interface CommandCandidate {
   command: string;
@@ -60,12 +71,12 @@ export function extractImmediateVoiceCommand(
   const normalized = normalizeVoiceTranscript(transcript);
   let latest: CommandCandidate | null = null;
 
-  for (const command of fixedCommandValues) {
+  for (const command of [...fixedCommandValues, ...additionalImmediateCommandValues]) {
     const index = normalized.lastIndexOf(command);
     if (index >= 0) latest = laterCommand(latest, { command, index });
   }
 
-  for (const pattern of [secondsCommandPattern, playbackRateCommandPattern]) {
+  for (const pattern of [secondsCommandPattern, playbackRateCommandPattern, spokenPlaybackRateCommandPattern]) {
     for (const match of normalized.matchAll(new RegExp(pattern, "g"))) {
       latest = laterCommand(latest, { command: match[0], index: match.index });
     }

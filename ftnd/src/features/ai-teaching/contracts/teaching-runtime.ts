@@ -96,6 +96,9 @@ export interface TeachingRuntimeStatus {
     | 'demo'
     | 'practice'
     | 'challenge'
+    | 'slow-practice'
+    | 'slow-review'
+    | 'fast-challenge'
     | 'paused'
     | 'completed'
     | 'error';

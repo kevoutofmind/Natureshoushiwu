@@ -38,7 +38,7 @@ describe('KimiVoiceCommandRouterService', () => {
 
     expect(result?.data.command).toMatchObject({
       intent: 'PREVIOUS_ACTION',
-      parameters: { playbackRate: 0.6 },
+      parameters: { playbackRate: 0.5 },
     });
   });
 
@@ -101,6 +101,41 @@ describe('KimiVoiceCommandRouterService', () => {
       accepted: true,
       label: 'AI 教练答疑',
       command: { intent: 'COACH_QUESTION' },
+    });
+  });
+
+  it('keeps a safe companion response when no command intent is needed', async () => {
+    process.env.KIMI_API_KEY = 'test-key';
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  intent: null,
+                  confidence: 0.94,
+                  seconds: null,
+                  playbackRate: null,
+                  responseText: '紧张很正常，先深呼吸一下，我们按你的节奏慢慢来。',
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response);
+
+    const result = await new KimiVoiceCommandRouterService().interpret(
+      '我有点紧张，陪我聊两句',
+      '我有点紧张陪我聊两句',
+    );
+
+    expect(result?.data).toMatchObject({
+      accepted: false,
+      label: 'Lumi 陪伴回应',
+      responseText: '紧张很正常，先深呼吸一下，我们按你的节奏慢慢来。',
+      command: { intent: null },
     });
   });
 });
