@@ -9,6 +9,7 @@ import {
   KIMI_VOICE_ROUTER_PROMPT_VERSION,
   KIMI_VOICE_ROUTER_SYSTEM_PROMPT,
 } from './prompts/kimi-voice-router.prompt';
+import { nearestPlaybackRateStep } from './voice-command-keywords';
 
 interface KimiChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
@@ -23,7 +24,7 @@ export class KimiVoiceCommandRouterService {
   private readonly model = process.env.KIMI_MODEL ?? 'kimi-k2.6';
   private readonly timeoutMs = positiveInteger(
     process.env.KIMI_VOICE_TIMEOUT_MS,
-    3000,
+    12000,
   );
 
   get configured(): boolean {
@@ -91,20 +92,42 @@ export class KimiVoiceCommandRouterService {
     normalizedTranscript: string,
     data: Record<string, unknown>,
   ): VoiceCommandResponse | null {
-    const intent = this.parseIntent(data.intent);
     const confidence = boundedNumber(data.confidence, 0, 1) ?? 0;
+    const responseText =
+      typeof data.responseText === 'string' && data.responseText.trim()
+        ? data.responseText.trim().slice(0, 160)
+        : '我在陪着你，按自己的节奏来就好。';
+
+    if (data.intent === null) {
+      if (confidence < 0.65) return null;
+      return {
+        success: true,
+        code: 'VOICE_COMMAND_NOT_RECOGNIZED',
+        message: 'Kimi 已生成 Lumi 陪伴回应。',
+        data: {
+          accepted: false,
+          command: {
+            transcript,
+            normalizedTranscript,
+            intent: null,
+            confidence,
+            parameters: {},
+          },
+          label: 'Lumi 陪伴回应',
+          responseText,
+          executionStatus: 'not-dispatched',
+        },
+      };
+    }
+
+    const intent = this.parseIntent(data.intent);
     if (!intent || confidence < 0.65) return null;
 
     const parameters: VoiceCommandParameters = {};
     const seconds = boundedNumber(data.seconds, 0.5, 30);
     if (seconds !== undefined) parameters.seconds = seconds;
     const playbackRate = boundedNumber(data.playbackRate, 0.25, 2);
-    if (playbackRate !== undefined) parameters.playbackRate = playbackRate;
-    const responseText =
-      typeof data.responseText === 'string' && data.responseText.trim()
-        ? data.responseText.trim().slice(0, 160)
-        : '好的，我明白你的意思了。';
-
+    if (playbackRate !== undefined) parameters.playbackRate = nearestPlaybackRateStep(playbackRate);
     return {
       success: true,
       code: 'VOICE_COMMAND_RECOGNIZED',

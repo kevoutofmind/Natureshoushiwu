@@ -3,24 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import CameraswitchRoundedIcon from "@mui/icons-material/CameraswitchRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
-import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
 import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
-import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
 import {
   Alert,
   Box,
   Button,
-  Chip,
-  LinearProgress,
   Stack,
   Typography,
 } from "@mui/material";
 import { useRouter } from "next/navigation";
 import { saveDraft } from "@/features/drafts/draft-store";
 import { SkeletonOverlay } from "@/features/video-stage/components/SkeletonOverlay";
+import { RecordingEffectsPicker } from "@/features/video-stage/components/RecordingEffectsPicker";
 import { useHolisticLandmarker } from "@/features/video-stage/hooks/useHolisticLandmarker";
+import { useRecordingEffectRenderer } from "@/features/video-stage/hooks/useRecordingEffectRenderer";
+import {
+  DEFAULT_BEAUTY_SETTINGS,
+  type BeautySettings,
+  type RecordingEffectId,
+} from "@/features/video-stage/recording-effects";
 import {
   averageVisibility,
   compareGeometry,
@@ -30,20 +33,51 @@ import type {
   VisionComparisonPayload,
 } from "@/features/video-stage/vision-types";
 import {
-  VoiceControlPanel,
   type VoiceCommandResult,
+  VoiceControlPanel,
 } from "@/features/voice-control";
+import { getPopularDances } from "@/features/popular-dances/api";
 import { getTeachingWorkspace } from "./api";
-import TeachingSidePanel from "./components/TeachingSidePanel";
+import FloatingAiCoach from "./components/FloatingAiCoach";
+import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
+import MotionPreviewSequence from "./components/MotionPreviewSequence";
 import {
-  VlmCoachFeedback,
-  VlmProgressFeedback,
-  VlmStageFeedbackOverlay,
-} from "./components/VlmFeedbackWidgets";
+  getMotionBreakdown,
+  type CuratedMotionBreakdown,
+} from "./motion-breakdown-api";
+import { VlmStageFeedbackOverlay } from "./components/VlmFeedbackWidgets";
 import { useVlmTeachingFeedback } from "./hooks/useVlmTeachingFeedback";
 import { useTeachingRuntime } from "./hooks/useTeachingRuntime";
+import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
+
+const FULL_FRAME_STREAK = 3;
+
+function landmarkConfidence(
+  landmark: SkeletonSnapshot["pose"][number] | undefined,
+) {
+  return landmark?.visibility ?? landmark?.presence ?? 0;
+}
+
+function handConfidence(hand: SkeletonSnapshot["leftHand"]) {
+  if (hand.length < 15) return 0;
+  return hand.reduce(
+    (sum, landmark) => sum + landmarkConfidence(landmark),
+    0,
+  ) / hand.length;
+}
+
+function hasStableFullFrame(snapshot: SkeletonSnapshot) {
+  const upperBody = [11, 12, 13, 14, 15, 16].every(
+    (index) => landmarkConfidence(snapshot.pose[index]) >= 0.35,
+  );
+  return (
+    upperBody &&
+    handConfidence(snapshot.leftHand) >= 0.3 &&
+    handConfidence(snapshot.rightHand) >= 0.3
+  );
+}
 
 function getRecordingMimeType() {
   const candidates = [
@@ -54,7 +88,17 @@ function getRecordingMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
-export default function AITeachingPage({ danceId }: { danceId?: string }) {
+export default function AITeachingPage({
+  danceId,
+  selectedDanceId,
+  danceTitle,
+  onboarding = false,
+}: {
+  danceId?: string;
+  selectedDanceId?: string;
+  danceTitle?: string;
+  onboarding?: boolean;
+}) {
   const activeDanceId = danceId ?? "dance-001";
   const roadshowMode = process.env.NEXT_PUBLIC_ROADSHOW_MODE === "true";
   const router = useRouter();
@@ -67,6 +111,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   const previewUrlRef = useRef<string | null>(null);
   const referenceUrlRef = useRef<string | null>(null);
   const animationRef = useRef<number | null>(null);
+  const fullFrameStreakRef = useRef(0);
   const {
     load: loadVision,
     detect,
@@ -74,9 +119,17 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     error: visionError,
   } = useHolisticLandmarker();
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
+  const [recordingEffect, setRecordingEffect] =
+    useState<RecordingEffectId>("clear");
+  const [beautySettings, setBeautySettings] =
+    useState<BeautySettings>(DEFAULT_BEAUTY_SETTINGS);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
+  const [selectedReferenceUrl, setSelectedReferenceUrl] = useState("");
+  const [motionBreakdown, setMotionBreakdown] =
+    useState<CuratedMotionBreakdown | null>(null);
+  const [referencePlaybackTimeMs, setReferencePlaybackTimeMs] = useState(0);
   const [liveSkeleton, setLiveSkeleton] = useState<SkeletonSnapshot | null>(
     null,
   );
@@ -87,18 +140,31 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [coachAnswer, setCoachAnswer] = useState("");
+  const [lumiStage, setLumiStage] = useState<"intro" | "preview" | "teaching">(
+    onboarding ? "intro" : "teaching",
+  );
+  const {
+    containerRef: effectCanvasContainerRef,
+    getRecordingStream,
+    rendererState,
+  } = useRecordingEffectRenderer({
+    sourceVideoRef: liveVideoRef,
+    sourceStreamRef: streamRef,
+    effect: recordingEffect,
+    beauty: beautySettings,
+    enabled:
+      recordingState === "camera-ready" || recordingState === "recording",
+  });
   const {
     actionIndex,
     applyFeedback,
+    clearNotVisible,
     reaction: vlmReaction,
   } = useVlmTeachingFeedback();
   const {
     prepare: prepareTeaching,
     ingestSkeleton,
     handleVoiceResult,
-    simulateCorrectMotion,
-    sendVoiceCommand,
     runtimeStatus,
     buildProgress,
     referenceVideoUrl,
@@ -117,21 +183,42 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     );
   }, [activeDanceId]);
 
-  const effectiveReferenceUrl = referenceVideoUrl || referenceUrl;
-  const motionCount = lessonMotions.length;
-  const completedMotionCount = teachingSession?.completedMotions.length ?? 0;
-  const currentMotionNumber = teachingSession
-    ? Math.min(teachingSession.currentMotionIndex + 1, Math.max(1, motionCount))
-    : 0;
+  useEffect(() => {
+    let active = true;
+    getPopularDances()
+      .then((response) => {
+        const selectedDance = response.data.items.find(
+          (item) => (item.runtimeDanceId ?? item.id) === activeDanceId,
+        );
+        if (active) setSelectedReferenceUrl(selectedDance?.coverUrl ?? "");
+      })
+      .catch(() => {
+        if (active) setSelectedReferenceUrl("");
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeDanceId]);
+
+  useEffect(() => {
+    let active = true;
+    getMotionBreakdown(activeDanceId)
+      .then((breakdown) => {
+        if (active) setMotionBreakdown(breakdown);
+      })
+      .catch(() => {
+        if (active) setMotionBreakdown(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeDanceId]);
+
+  const effectiveReferenceUrl =
+    referenceUrl || referenceVideoUrl || selectedReferenceUrl;
   const currentInstruction = teachingSession
     ? lessonMotions[teachingSession.currentMotionIndex]?.instruction
     : undefined;
-  const lessonProgress =
-    teachingSession?.phase === "COMPLETED"
-      ? 100
-      : motionCount > 0
-        ? Math.round((completedMotionCount / motionCount) * 100)
-        : 0;
   const phaseLabel = teachingSession
     ? {
         PREVIEW: "熟悉整舞",
@@ -187,6 +274,14 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
         if (result) {
           setLiveSkeleton(result);
           ingestSkeleton(result);
+          if (hasStableFullFrame(result)) {
+            fullFrameStreakRef.current += 1;
+            if (fullFrameStreakRef.current >= FULL_FRAME_STREAK) {
+              clearNotVisible();
+            }
+          } else {
+            fullFrameStreakRef.current = 0;
+          }
         }
       }
       if (active) animationRef.current = requestAnimationFrame(tick);
@@ -197,7 +292,14 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
       active = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [detect, ingestSkeleton, previewUrl, recordingState, visionState]);
+  }, [
+    clearNotVisible,
+    detect,
+    ingestSkeleton,
+    previewUrl,
+    recordingState,
+    visionState,
+  ]);
 
   const selectReference = (file?: File) => {
     if (!file) return;
@@ -300,6 +402,19 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const finishLumiIntro = () => {
+    setLumiStage("preview");
+  };
+
+  const enterTeachingFromPreview = () => {
+    const referenceVideo = referenceVideoRef.current;
+    if (referenceVideo) {
+      referenceVideo.pause();
+      referenceVideo.currentTime = 0;
+    }
+    setLumiStage("teaching");
+  };
+
   const startCamera = async () => {
     setError("");
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -332,7 +447,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
   };
 
   const startRecording = () => {
-    const stream = streamRef.current;
+    const stream = getRecordingStream();
     if (!stream || typeof MediaRecorder === "undefined") {
       setError("请先打开摄像头，或更换支持 MediaRecorder 的浏览器。");
       return;
@@ -392,31 +507,19 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
     }
   };
 
-  const handleRecognizedVoiceResult = async (result: VoiceCommandResult) => {
-    if (result.accepted) {
-      setCoachAnswer(result.responseText);
-    }
-
-    if (result.command.intent === "START_RECORDING") {
-      if (!streamRef.current) {
-        await startCamera();
-      }
-      if (streamRef.current && recorderRef.current?.state !== "recording") {
-        startRecording();
-      }
-      return;
-    }
-
-    if (result.command.intent === "STOP_RECORDING") {
-      stopRecording();
-      return;
-    }
-
-    if (result.command.intent !== "COACH_QUESTION") {
-      handleVoiceResult(result);
-    }
+  const startRecordingFromVoice = async () => {
+    if (recorderRef.current?.state === "recording") return;
+    if (!streamRef.current) await startCamera();
+    if (streamRef.current) startRecording();
   };
 
+  const handlePageVoiceResult = (result: VoiceCommandResult) => {
+    const recordingHandled = executeRecordingVoiceCommand(result, {
+      start: startRecordingFromVoice,
+      stop: stopRecording,
+    });
+    if (!recordingHandled) handleVoiceResult(result);
+  };
   const storeDraft = async () => {
     if (!recordedBlob) return;
     setSaving(true);
@@ -437,30 +540,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
 
   return (
     <Box className="teaching-page">
-      <Stack
-        className="teaching-header"
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        gap={2}
-      >
-        <Typography component="h1" variant="h4" fontWeight={900}>
-          AI 教学
-        </Typography>
-        <Stack direction="row" gap={1}>
-          {danceId && <Chip label={`已选择：${danceId}`} size="small" />}
-          <Chip
-            size="small"
-            label={recordingState === "recording" ? "正在录制" : "本地录制"}
-            color={recordingState === "recording" ? "secondary" : "default"}
-            icon={
-              recordingState === "recording" ? (
-                <FiberManualRecordRoundedIcon />
-              ) : undefined
-            }
-          />
-        </Stack>
-      </Stack>
+      <Box className="teaching-header teaching-header-spacer" aria-hidden="true" />
 
       {(visionState === "loading" || visionError) && (
         <Alert
@@ -490,88 +570,13 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
       )}
 
       <Box className="teaching-studio-workspace">
-        <Stack className="teaching-side-rail" gap={1.5}>
-          <TeachingSidePanel title="教学进度" icon={<TimelineRoundedIcon />}>
-            <Stack gap={1.2}>
-              <Typography variant="body2" color="text.secondary">
-                今天不赶进度，我们按“熟悉—拆解—连贯”三步把动作真正学会。
-              </Typography>
-              <Stack direction="row" gap={0.6} flexWrap="wrap">
-                <Chip
-                  size="small"
-                  label="① 熟悉整舞"
-                  color={
-                    teachingSession?.phase === "PREVIEW" ? "primary" : "default"
-                  }
-                />
-                <Chip
-                  size="small"
-                  label="② 拆解分段"
-                  color={
-                    teachingSession &&
-                    ["MOTION_DEMO", "PRACTICE", "PAUSED"].includes(
-                      teachingSession.phase,
-                    )
-                      ? "primary"
-                      : "default"
-                  }
-                />
-                <Chip
-                  size="small"
-                  label="③ 连贯练习"
-                  color={
-                    teachingSession &&
-                    ["FULL_CHALLENGE", "COMPLETED"].includes(
-                      teachingSession.phase,
-                    )
-                      ? "primary"
-                      : "default"
-                  }
-                />
-              </Stack>
-              <LinearProgress variant="determinate" value={lessonProgress} />
-              <Typography variant="body2" fontWeight={800}>
-                {motionCount > 0
-                  ? `已掌握 ${completedMotionCount}/${motionCount} 个动作单元`
-                  : "启动教学后，我会先为你整理动作路线。"}
-              </Typography>
-            </Stack>
-            <VlmProgressFeedback
-              actionIndex={actionIndex}
-              reaction={vlmReaction}
-            />
-            <Stack
-              gap={0.8}
-              sx={{
-                mt: 1.5,
-                pt: 1.5,
-                borderTop: "1px solid",
-                borderColor: "divider",
-              }}
-            >
-              <Typography fontWeight={850}>
-                {currentMotionNumber > 0
-                  ? `当前：动作 ${currentMotionNumber}/${motionCount}`
-                  : "等待开始教学"}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {currentInstruction ??
-                  "我会把每个动作控制在约 3 秒，并告诉你这一遍只需要关注什么。"}
-              </Typography>
-            </Stack>
-            {comparison && (
-              <Stack gap={1}>
-                <Chip
-                  size="small"
-                  label={`${comparison.measurements.length} 项骨骼测量`}
-                />
-                <Typography variant="body2">
-                  已生成当前参考帧与跟练帧的结构化对齐结果。
-                </Typography>
-              </Stack>
-            )}
-          </TeachingSidePanel>
-        </Stack>
+        <aside className="motion-thumbnail-rail" aria-label="四个关键动作">
+          <MotionPreviewSequence
+            mode="compact"
+            videoUrl={effectiveReferenceUrl}
+            motions={motionBreakdown?.motions}
+          />
+        </aside>
 
         <Box className="studio-layout">
           <Box className="studio-column studio-column-reference">
@@ -591,6 +596,16 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                       controls
                       playsInline
                       preload="metadata"
+                      onLoadedMetadata={(event) =>
+                        setReferencePlaybackTimeMs(
+                          Math.round(event.currentTarget.currentTime * 1000),
+                        )
+                      }
+                      onTimeUpdate={(event) =>
+                        setReferencePlaybackTimeMs(
+                          Math.round(event.currentTarget.currentTime * 1000),
+                        )
+                      }
                     />
                     <SkeletonOverlay
                       snapshot={referenceSkeleton}
@@ -649,7 +664,17 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   />
                 ) : (
                   <>
-                    <video ref={liveVideoRef} muted playsInline />
+                    <video
+                      className="camera-feed-mirrored camera-source-video"
+                      ref={liveVideoRef}
+                      muted
+                      playsInline
+                    />
+                    <Box
+                      ref={effectCanvasContainerRef}
+                      className="camera-effect-layer"
+                      aria-hidden="true"
+                    />
                     <SkeletonOverlay
                       snapshot={liveSkeleton}
                       videoRef={liveVideoRef}
@@ -665,6 +690,26 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                 )}
                 {recordingState === "recording" && (
                   <Box className="recording-indicator">REC</Box>
+                )}
+                {motionBreakdown && (
+                  <MotionBreakdownOverlay
+                    motions={motionBreakdown.motions}
+                    currentTimeMs={referencePlaybackTimeMs}
+                  />
+                )}
+                {error && <Box className="stage-error">{error}</Box>}
+                {!previewUrl && (
+                  <RecordingEffectsPicker
+                    value={recordingEffect}
+                    onChange={setRecordingEffect}
+                    beauty={beautySettings}
+                    onBeautyChange={(key, value) =>
+                      setBeautySettings((current) => ({
+                        ...current,
+                        [key]: value,
+                      }))
+                    }
+                  />
                 )}
                 <VlmStageFeedbackOverlay
                   actionIndex={actionIndex}
@@ -696,6 +741,7 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   variant="contained"
                   color="secondary"
                   onClick={startRecording}
+                  disabled={rendererState === "loading"}
                   startIcon={<FiberManualRecordRoundedIcon />}
                 >
                   开始录制并启动 AI 教学
@@ -726,15 +772,10 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   </Button>
                 </>
               )}
-              <VoiceControlPanel
-                fullWidth={false}
-                onCommandRecognized={(result) =>
-                  void handleRecognizedVoiceResult(result)
-                }
-              />
               {!roadshowMode && (
                 <Button
                   variant="outlined"
+                  className="studio-development-control"
                   onClick={captureComparison}
                   disabled={
                     !effectiveReferenceUrl ||
@@ -751,54 +792,38 @@ export default function AITeachingPage({ danceId }: { danceId?: string }) {
                   导出 JSON
                 </Button>
               )}
-              {teachingSession?.phase === "PREVIEW" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void sendVoiceCommand("READY")}
-                >
-                  我已熟悉，直接拆动作
-                </Button>
-              )}
-              {teachingSession?.phase === "MOTION_DEMO" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void sendVoiceCommand("READY")}
-                >
-                  我准备好了，开始练
-                </Button>
-              )}
-              {roadshowMode && teachingSession?.phase === "PRACTICE" && (
-                <Button
-                  variant="outlined"
-                  onClick={() => void simulateCorrectMotion()}
-                >
-                  无摄像头：模拟正确动作
-                </Button>
-              )}
+              <Box className="studio-voice-control">
+                <VoiceControlPanel
+                  onCommandRecognized={handlePageVoiceResult}
+                />
+              </Box>
             </Stack>
           </Box>
         </Box>
 
-        <Stack className="teaching-side-rail" gap={1.5}>
-          <TeachingSidePanel title="AI 教练" icon={<ForumRoundedIcon />}>
-            <VlmCoachFeedback
-              actionIndex={actionIndex}
-              reaction={vlmReaction}
-            />
-            <Typography variant="body2" mt={1}>
-              {coachAnswer ||
-                latestSpeech ||
-                "你好，我会陪你一步一步来。你随时可以说“慢一点”“再教我一次”或“我准备好了”，学习节奏由你决定。"}
-            </Typography>
-            {teachingSession && (
-              <Chip
-                size="small"
-                sx={{ mt: 1 }}
-                label={`${phaseLabel} · 动作 ${currentMotionNumber}/${motionCount}`}
-              />
-            )}
-          </TeachingSidePanel>
-        </Stack>
+        {lumiStage !== "preview" && (
+          <FloatingAiCoach
+            introOpen={lumiStage === "intro"}
+            danceTitle={danceTitle ?? selectedDanceId ?? activeDanceId}
+            motions={lessonMotions}
+            phaseLabel={phaseLabel}
+            speech={
+              currentInstruction ??
+              latestSpeech ??
+              "我会陪你一步一步练，先看清手的位置。"
+            }
+            review={null}
+            onFinishIntro={finishLumiIntro}
+          />
+        )}
+        {lumiStage === "preview" && (
+          <MotionPreviewSequence
+            mode="overlay"
+            videoUrl={effectiveReferenceUrl}
+            motions={motionBreakdown?.motions}
+            onContinue={enterTeachingFromPreview}
+          />
+        )}
       </Box>
     </Box>
   );

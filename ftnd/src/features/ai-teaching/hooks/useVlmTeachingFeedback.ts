@@ -31,6 +31,12 @@ export function useVlmTeachingFeedback() {
     }
   }, []);
 
+  const clearNotVisible = useCallback(() => {
+    setReaction((current) =>
+      current?.kind === 'NOT_VISIBLE' ? null : current,
+    );
+  }, []);
+
   useEffect(() => {
     const handleFeedbackEvent = (event: Event) => {
       const feedback = normalizeVlmTeachingFeedback(
@@ -47,5 +53,5 @@ export function useVlmTeachingFeedback() {
       );
   }, [applyFeedback]);
 
-  return { actionIndex, applyFeedback, reaction };
+  return { actionIndex, applyFeedback, clearNotVisible, reaction };
 }

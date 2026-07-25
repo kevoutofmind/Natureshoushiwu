@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "curated-motion-breakdown-v1",
+  "danceId": "dance-003",
+  "title": "fade",
+  "sourceVideoUrl": "/dances/dance-003/reference.mp4",
+  "durationMs": 10733,
+  "motions": [
+    {
+      "motionId": "fade-001",
+      "startMs": 0,
+      "endMs": 2200,
+      "label": "双手胸前下方预备",
+      "steps": ["两手自然张开停在胸前下方", "手腕放松、掌心微向内", "手肘贴近身体等待下一拍"]
+    },
+    {
+      "motionId": "fade-002",
+      "startMs": 2200,
+      "endMs": 4500,
+      "label": "双掌前推后五指展开",
+      "steps": ["双掌由胸前同时向镜头推出", "推出时五指完全打开", "掌根先回收，手指随后放松"]
+    },
+    {
+      "motionId": "fade-003",
+      "startMs": 4500,
+      "endMs": 6800,
+      "label": "右掌沿脸侧斜上划",
+      "steps": ["右手五指并拢从右下方起", "掌背沿脸侧斜向上划过", "左手保持胸前、不要跟着抬起"]
+    },
+    {
+      "motionId": "fade-004",
+      "startMs": 6800,
+      "endMs": 9000,
+      "label": "双拳左右交替上摆",
+      "steps": ["双手收成轻拳并放在胸前", "左拳、右拳依次向上提起", "每次只抬一拳，另一拳留在原位"]
+    },
+    {
+      "motionId": "fade-005",
+      "startMs": 9000,
+      "endMs": 10733,
+      "label": "双掌收至肩侧定格",
+      "steps": ["双手由前方收回肩膀两侧", "掌心转向内、手指自然张开", "手肘微弯，停住完成定格"]
+    }
+  ]
+}
