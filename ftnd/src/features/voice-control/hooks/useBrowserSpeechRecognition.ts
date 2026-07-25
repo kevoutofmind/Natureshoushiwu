@@ -170,11 +170,12 @@ export function useBrowserSpeechRecognition({
 
     recognition.onerror = (event) => {
       if (event.error === "aborted" || event.error === "no-speech") return;
-      keepListeningRef.current = false;
       setIsListening(false);
       setError(
         speechErrorMessages[event.error] ?? `语音识别发生错误：${event.error}`,
       );
+      if (event.error === 'network') return;
+      keepListeningRef.current = false;
     };
 
     recognition.onend = () => {

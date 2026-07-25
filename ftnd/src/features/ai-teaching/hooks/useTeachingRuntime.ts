@@ -40,6 +40,11 @@ import {
   startTeachingSession,
 } from "../vlm-runtime-api";
 
+import {
+  TEACHING_MOTION_CLIP_COUNT,
+  teachingMotionClipUrl,
+} from '../motion-video-catalog';
+
 interface UseTeachingRuntimeOptions {
   danceId: string;
   referenceVideoRef: RefObject<HTMLVideoElement | null>;
@@ -88,7 +93,10 @@ export function useTeachingRuntime({
   const [lessonMotions, setLessonMotions] = useState<
     Array<{ motionId: string; instruction: string }>
   >([]);
+  const [activePlaybackVideoUrl, setActivePlaybackVideoUrl] = useState('');
+  const [activeMotionClipIndex, setActiveMotionClipIndex] = useState<number | null>(null);
   const datasetRef = useRef<ReferenceDanceDataset | null>(null);
+  const originalVideoUrlRef = useRef('');
   const sessionRef = useRef<TeachingAgentSession | null>(null);
   const eventSequenceRef = useRef(0);
   const evaluatingRef = useRef(false);
@@ -102,6 +110,9 @@ export function useTeachingRuntime({
   const challengeCommandRef = useRef<TeachingAgentCommand | null>(null);
   const slowPracticeActiveRef = useRef(false);
   const slowPracticeSamplesRef = useRef<SlowPracticeSample[]>([]);
+  const playTeachingMotionClipRef = useRef<
+    (motionIndex: number) => Promise<void>
+  >(async () => undefined);
 
   const speak = useCallback((speech: string) => {
     if (!speech.trim()) return;
@@ -147,12 +158,43 @@ export function useTeachingRuntime({
     ) => {
       playbackCleanupRef.current?.();
       const video = await waitForVideo(referenceVideoRef);
-      await waitForMetadata(video);
-      const startMs = numberArgument(command.arguments.startMs, 0);
-      const endMs = numberArgument(
-        command.arguments.endMs,
-        Math.round(video.duration * 1000),
+      const requestedMotionIndex = numberArgument(
+        command.arguments.motionIndex,
+        sessionRef.current?.currentMotionIndex ?? -1,
       );
+      const motionClipUrl =
+        command.tool === 'PLAY_MOTION_DEMO'
+          ? teachingMotionClipUrl(danceId, requestedMotionIndex)
+          : null;
+      const originalVideoUrl = originalVideoUrlRef.current;
+      let usingMotionClip = false;
+
+      if (motionClipUrl) {
+        try {
+          setActivePlaybackVideoUrl(motionClipUrl);
+          await loadPlaybackSource(video, motionClipUrl);
+          usingMotionClip = true;
+          setActiveMotionClipIndex(requestedMotionIndex);
+        } catch {
+          setActivePlaybackVideoUrl(originalVideoUrl);
+          setActiveMotionClipIndex(null);
+          await loadPlaybackSource(video, originalVideoUrl);
+        }
+      } else {
+        setActivePlaybackVideoUrl(originalVideoUrl);
+        setActiveMotionClipIndex(null);
+        await loadPlaybackSource(video, originalVideoUrl);
+      }
+
+      const startMs = usingMotionClip
+        ? 0
+        : numberArgument(command.arguments.startMs, 0);
+      const endMs = usingMotionClip
+        ? Math.round(video.duration * 1000)
+        : numberArgument(
+            command.arguments.endMs,
+            Math.round(video.duration * 1000),
+          );
       const playbackRate = numberArgument(command.arguments.playbackRate, 1);
       video.currentTime = Math.max(0, startMs / 1000);
       video.playbackRate = Math.max(0.25, Math.min(2, playbackRate));
@@ -204,7 +246,7 @@ export function useTeachingRuntime({
         throw error;
       }
     },
-    [referenceVideoRef],
+    [danceId, referenceVideoRef],
   );
 
   const executeCommandsRef = useRef<
@@ -345,6 +387,14 @@ export function useTeachingRuntime({
       message: "正在准备本地骨骼模板…",
     });
     try {
+      const manifest = await loadReferenceManifest(danceId);
+      const primary =
+        manifest.references.find(
+          (reference) => reference.referenceId === manifest.primaryReferenceId,
+        ) ?? manifest.references[0];
+      originalVideoUrlRef.current = primary.videoUrl;
+      setReferenceVideoUrl(primary.videoUrl);
+      setActivePlaybackVideoUrl(primary.videoUrl);
       let dataset = await getReferenceDataset(danceId);
       if (dataset) {
         setReferenceVideoUrl(dataset.referenceVideoUrl);
@@ -575,6 +625,29 @@ export function useTeachingRuntime({
         return;
       }
 
+      const currentMotionIndex =
+        activeMotionClipIndex ?? sessionRef.current?.currentMotionIndex ?? 0;
+      if (intent === 'PREVIOUS_ACTION') {
+        void playTeachingMotionClipRef.current(
+          Math.max(0, currentMotionIndex - 1),
+        );
+        return;
+      }
+      if (intent === 'NEXT_ACTION') {
+        void playTeachingMotionClipRef.current(
+          Math.min(TEACHING_MOTION_CLIP_COUNT - 1, currentMotionIndex + 1),
+        );
+        return;
+      }
+      if (intent === 'REPEAT_ACTION') {
+        void playTeachingMotionClipRef.current(currentMotionIndex);
+        return;
+      }
+      if (intent === 'RESTART_LESSON') {
+        void playTeachingMotionClipRef.current(0);
+        return;
+      }
+
       const mappings: Partial<Record<string, TeachingVoiceCommand>> = {
         READY: "READY",
         REWIND: "PREVIOUS_ACTION",
@@ -587,7 +660,7 @@ export function useTeachingRuntime({
       const agentCommand = mappings[intent];
       if (agentCommand) void sendVoiceCommand(agentCommand);
     },
-    [referenceVideoRef, sendVoiceCommand],
+    [activeMotionClipIndex, referenceVideoRef, sendVoiceCommand],
   );
   const simulateCorrectMotion = useCallback(async () => {
     const currentSession = sessionRef.current;
@@ -637,6 +710,48 @@ export function useTeachingRuntime({
     }
   }, [executeTurn, sendEvent]);
 
+  const playTeachingMotionClip = useCallback(
+    async (motionIndex: number) => {
+      if (!teachingMotionClipUrl(danceId, motionIndex)) {
+        setRuntimeStatus({
+          state: 'error',
+          message: '这个动作暂时没有可播放的视频切片。',
+        });
+        return;
+      }
+
+      try {
+        await playRange(
+          {
+            commandId: `manual-motion-clip-${motionIndex}-${Date.now()}`,
+            tool: 'PLAY_MOTION_DEMO',
+            arguments: {
+              motionIndex,
+              startMs: 0,
+              playbackRate: 1,
+            },
+            requiresAck: false,
+            blocking: true,
+          },
+          {
+            state: 'demo',
+            message: `正在教学第 ${motionIndex + 1} 个动作，再点一次可以重新播放。`,
+          },
+          async () => {
+            setRuntimeStatus({
+              state: 'ready',
+              message: `第 ${motionIndex + 1} 个动作播放完成，可以选择其他动作继续学习。`,
+            });
+          },
+        );
+      } catch (error: unknown) {
+        setRuntimeStatus({ state: 'error', message: errorMessage(error) });
+      }
+    },
+    [danceId, playRange],
+  );
+  playTeachingMotionClipRef.current = playTeachingMotionClip;
+
   useEffect(
     () => () => {
       playbackCleanupRef.current?.();
@@ -654,6 +769,9 @@ export function useTeachingRuntime({
     runtimeStatus,
     buildProgress,
     referenceVideoUrl,
+    activePlaybackVideoUrl,
+    activeMotionClipIndex,
+    playTeachingMotionClip,
     session,
     latestJudgeResult,
     latestSpeech,
@@ -783,6 +901,21 @@ function waitForMetadata(video: HTMLVideoElement): Promise<void> {
       { once: true },
     );
   });
+}
+
+async function loadPlaybackSource(
+  video: HTMLVideoElement,
+  sourceUrl: string,
+): Promise<void> {
+  if (!sourceUrl) throw new Error('参考视频地址为空。');
+  const requestedUrl = new URL(sourceUrl, window.location.href).href;
+  const currentUrl = video.currentSrc || video.src;
+  if (currentUrl !== requestedUrl) {
+    video.pause();
+    video.src = sourceUrl;
+    video.load();
+  }
+  await waitForMetadata(video);
 }
 
 function numberArgument(value: unknown, fallback: number): number {
