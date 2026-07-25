@@ -41,13 +41,16 @@ type FxCanvas = HTMLCanvasElement & {
 type FxModule = { canvas: () => FxCanvas };
 
 const MAX_RENDER_HEIGHT = 1280;
+// Matches the source hand-dance videos (720×1280 / 1080×1920). Drawing and
+// CSS use the same 9:16 ratio, so opening the camera cannot stretch a person.
+const OUTPUT_ASPECT_RATIO = 9 / 16;
 
 function getRenderSize(video: HTMLVideoElement) {
   const sourceWidth = video.videoWidth || 720;
   const sourceHeight = video.videoHeight || 1280;
   const scale = Math.min(1, MAX_RENDER_HEIGHT / sourceHeight);
   const height = Math.max(2, Math.round(sourceHeight * scale));
-  const width = Math.max(2, Math.round(height * (9 / 16)));
+  const width = Math.max(2, Math.round(height * OUTPUT_ASPECT_RATIO));
   return { width, height, sourceWidth, sourceHeight };
 }
 
