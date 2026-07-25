@@ -5,13 +5,6 @@ import type { BeautySettings, RecordingEffectId } from "../recording-effects";
 
 type FacePoint = { x: number; y: number };
 
-type FaceLandmarkerRunner = {
-  detectForVideo: (
-    video: HTMLVideoElement,
-    timestampMs: number,
-  ) => { faceLandmarks: FacePoint[][] };
-  close?: () => void;
-};
 
 type FxTexture = {
   loadContentsOf: (element: HTMLCanvasElement) => void;
@@ -45,6 +38,16 @@ const MAX_RENDER_HEIGHT = 1280;
 // CSS use the same 9:16 ratio, so opening the camera cannot stretch a person.
 const OUTPUT_ASPECT_RATIO = 9 / 16;
 
+function canReadVideoFrame(video: HTMLVideoElement | null): video is HTMLVideoElement {
+  return Boolean(
+    video &&
+      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      video.videoWidth > 0 &&
+      video.videoHeight > 0 &&
+      !video.paused &&
+      !video.ended,
+  );
+}
 function getRenderSize(video: HTMLVideoElement) {
   const sourceWidth = video.videoWidth || 720;
   const sourceHeight = video.videoHeight || 1280;
@@ -213,9 +216,7 @@ export function useRecordingEffectRenderer({
     let fxCanvas: FxCanvas | null = null;
     let texture: FxTexture | null = null;
     let sourceCanvas: HTMLCanvasElement | null = null;
-    let faceLandmarker: FaceLandmarkerRunner | null = null;
     let latestFace: FacePoint[] | null = null;
-    let lastFaceDetectionAt = 0;
     const container = containerRef.current;
     if (!container) return;
     if (!enabled) {
@@ -231,7 +232,7 @@ export function useRecordingEffectRenderer({
 
     const drawFallback = () => {
       const video = sourceVideoRef.current;
-      if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (!canReadVideoFrame(video)) return;
       const { width, height, sourceWidth, sourceHeight } = getRenderSize(video);
       if (fallbackCanvas.width !== width || fallbackCanvas.height !== height) {
         fallbackCanvas.width = width;
@@ -246,17 +247,9 @@ export function useRecordingEffectRenderer({
 
     const render = () => {
       const video = sourceVideoRef.current;
-      if (video?.readyState && fxCanvas && sourceCanvas) {
+      if (canReadVideoFrame(video) && fxCanvas && sourceCanvas) {
         const { width, height, sourceWidth, sourceHeight } = getRenderSize(video);
-        const now = performance.now();
-        if (faceLandmarker && now - lastFaceDetectionAt >= 83) {
-          lastFaceDetectionAt = now;
-          try {
-            latestFace = faceLandmarker.detectForVideo(video, now).faceLandmarks[0] ?? null;
-          } catch {
-            latestFace = null;
-          }
-        }
+        latestFace = null;
         if (sourceCanvas.width !== width || sourceCanvas.height !== height) {
           sourceCanvas.width = width;
           sourceCanvas.height = height;
@@ -307,44 +300,11 @@ export function useRecordingEffectRenderer({
       }
     };
 
-    const loadFaceLandmarker = async () => {
-      try {
-        const vision = (await import("@mediapipe/tasks-vision")) as unknown as {
-          FaceLandmarker: {
-            createFromOptions: (
-              fileset: unknown,
-              options: unknown,
-            ) => Promise<FaceLandmarkerRunner>;
-          };
-          FilesetResolver: {
-            forVisionTasks: (wasmRoot: string) => Promise<unknown>;
-          };
-        };
-        const fileset = await vision.FilesetResolver.forVisionTasks("/mediapipe/wasm");
-        const landmarker = await vision.FaceLandmarker.createFromOptions(fileset, {
-          baseOptions: {
-            modelAssetPath: "/mediapipe/models/face_landmarker.task",
-          },
-          runningMode: "VIDEO",
-          numFaces: 1,
-        });
-        if (!active) {
-          landmarker.close?.();
-          return;
-        }
-        faceLandmarker = landmarker;
-      } catch {
-        faceLandmarker = null;
-      }
-    };
-
     void loadGlfx();
-    void loadFaceLandmarker();
     animationFrame = requestAnimationFrame(render);
     return () => {
       active = false;
       if (animationFrame) cancelAnimationFrame(animationFrame);
-      faceLandmarker?.close?.();
       outputCanvasRef.current = null;
       container.replaceChildren();
     };

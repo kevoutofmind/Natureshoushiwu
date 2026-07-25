@@ -3887,3 +3887,112 @@ h6 {
     opacity: 1;
   }
 }
+
+/* Lumi lesson flow: overview -> training -> evaluation -> feedback. */
+.lesson-stage-badge {
+  position: absolute;
+  z-index: 8;
+  left: 12px;
+  top: 12px;
+  display: grid;
+  gap: 3px;
+  max-width: calc(100% - 24px);
+  padding: 8px 10px;
+  border: 1px solid rgb(37 244 238 / 55%);
+  border-radius: 12px;
+  color: #fff;
+  background: rgb(0 0 0 / 58%);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 30%);
+}
+
+.lesson-stage-badge span {
+  color: var(--aqua);
+  font-size: .68rem;
+  font-weight: 900;
+}
+
+.lesson-stage-badge strong {
+  overflow: hidden;
+  font-size: .88rem;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-countdown {
+  position: absolute;
+  z-index: 12;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: clamp(4rem, 18vw, 9rem);
+  font-weight: 1000;
+  text-shadow: 0 0 26px rgb(37 244 238 / 85%), 0 8px 38px rgb(0 0 0 / 80%);
+  background: rgb(0 0 0 / 28%);
+}
+
+.lesson-flow-stage-evaluation .motion-thumbnail-rail,
+.lesson-flow-stage-countdown .motion-thumbnail-rail,
+.lesson-flow-stage-evaluation .studio-actions,
+.lesson-flow-stage-countdown .studio-actions {
+  opacity: .34;
+  filter: blur(2px) saturate(.7);
+  pointer-events: none;
+}
+
+.lesson-flow-stage-evaluation .reference-phone,
+.lesson-flow-stage-evaluation .camera-stage,
+.lesson-flow-stage-countdown .reference-phone,
+.lesson-flow-stage-countdown .camera-stage {
+  border-color: rgb(37 244 238 / 86%);
+  box-shadow: 0 0 0 2px rgb(37 244 238 / 34%), 0 0 42px rgb(37 244 238 / 30%);
+}
+
+.lesson-flow-stage-feedback .reference-phone,
+.lesson-flow-stage-feedback .camera-stage {
+  filter: saturate(.78) brightness(.72);
+}
+
+.lesson-flow-stage-completed .reference-phone {
+  border-color: rgb(254 44 85 / 74%);
+  box-shadow: -4px 0 0 rgb(37 244 238 / 62%), 4px 0 0 rgb(254 44 85 / 62%), 0 0 48px rgb(254 44 85 / 22%);
+}
+
+.reference-phone video {
+  opacity: 1;
+  transition:
+    opacity 420ms cubic-bezier(.22, .61, .36, 1),
+    filter 420ms cubic-bezier(.22, .61, .36, 1),
+    transform 420ms cubic-bezier(.22, .61, .36, 1);
+}
+
+.reference-phone.is-video-fading-half video {
+  opacity: .55;
+  filter: blur(1.2px) saturate(.94);
+  transform: scale(1.003);
+}
+
+.reference-phone.is-video-fading-out video {
+  opacity: 0;
+  filter: blur(3px) saturate(.88);
+  transform: scale(1.007);
+}
+
+.reference-phone.is-video-transitioning video {
+  animation: lesson-video-fade-in 520ms cubic-bezier(.22, .61, .36, 1) both;
+}
+
+@keyframes lesson-video-fade-in {
+  0% {
+    opacity: 0;
+    filter: blur(3px) saturate(.88);
+    transform: scale(1.007);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0) saturate(1);
+    transform: scale(1);
+  }
+}

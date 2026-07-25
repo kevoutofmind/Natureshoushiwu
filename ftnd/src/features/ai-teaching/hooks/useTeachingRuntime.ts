@@ -688,7 +688,9 @@ export function useTeachingRuntime({
     },
     [danceId, playRange],
   );
-  playTeachingMotionClipRef.current = playTeachingMotionClip;
+  useEffect(() => {
+    playTeachingMotionClipRef.current = playTeachingMotionClip;
+  }, [playTeachingMotionClip]);
 
   useEffect(
     () => () => {

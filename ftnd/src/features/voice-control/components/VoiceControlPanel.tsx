@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import MicRoundedIcon from "@mui/icons-material/MicRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import {
@@ -19,12 +19,15 @@ import type { VoiceCommandResult } from "../types";
 import { matchActionNavigationVoiceIntent } from '../immediateVoiceCommands';
 
 interface VoiceControlPanelProps {
+  autoListen?: boolean;
   onCommandRecognized?: (result: VoiceCommandResult) => void;
 }
 
 export default function VoiceControlPanel({
+  autoListen = false,
   onCommandRecognized,
 }: VoiceControlPanelProps) {
+  const autoStartedRef = useRef(false);
   const [processing, setProcessing] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [lastResult, setLastResult] = useState<VoiceCommandResult | null>(null);
@@ -88,6 +91,25 @@ export default function VoiceControlPanel({
     onFinalTranscript: processTranscript,
   });
 
+  useEffect(() => {
+    if (autoListen && isSupported && !isListening && !processing) {
+      autoStartedRef.current = true;
+      startListening();
+      return;
+    }
+    if (!autoListen && autoStartedRef.current) {
+      autoStartedRef.current = false;
+      stopListening();
+    }
+  }, [
+    autoListen,
+    isListening,
+    isSupported,
+    processing,
+    startListening,
+    stopListening,
+  ]);
+
   const hasTranscript = Boolean(interimTranscript || lastTranscript);
   const showStatusPanel =
     !isSupported ||
@@ -113,6 +135,7 @@ export default function VoiceControlPanel({
               )
             }
             onClick={() => {
+              autoStartedRef.current = false;
               if (!isListening) startListening();
             }}
             disabled={!isSupported || processing}
@@ -126,7 +149,10 @@ export default function VoiceControlPanel({
               variant="outlined"
               color="secondary"
               startIcon={<StopCircleRoundedIcon />}
-              onClick={stopListening}
+              onClick={() => {
+                autoStartedRef.current = false;
+                stopListening();
+              }}
               sx={{ flexShrink: 0 }}
             >
               关闭
@@ -210,6 +236,12 @@ function actionNavigationResponse(intent: VoiceCommandResult['command']['intent'
       return '好的，播放下一个动作。';
     case 'RESTART_LESSON':
       return '好的，从第一个动作重新开始。';
+    case 'START_EVALUATION':
+      return '好的，进入评估。';
+    case 'SKIP_TO_OVERVIEW':
+      return '好的，回到主界面。';
+    case 'RETRY_PRACTICE':
+      return '好的，我们从训练再来一遍。';
     default:
       return '好的，继续练习。';
   }
