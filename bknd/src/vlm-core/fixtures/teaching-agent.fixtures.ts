@@ -18,6 +18,7 @@ export function createLessonPlanFixture(
       maxRetriesPerMotion: 1,
       allowVoiceSkip: true,
       autoAdvanceAfterMaxRetries: true,
+      confirmationRetryEnabled: false,
     },
     motions: motionIds.map((motionId, index) => ({
       motionId,

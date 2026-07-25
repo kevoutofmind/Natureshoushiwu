@@ -14,6 +14,15 @@ describe("teaching motion video catalog", () => {
     ]);
   });
 
+  it("maps runtime dataset IDs to their catalog asset folders", () => {
+    expect(teachingMotionClipUrls("cat")).toEqual([
+      "/dances/dance-001/motions/motion-01.mp4",
+      "/dances/dance-001/motions/motion-02.mp4",
+      "/dances/dance-001/motions/motion-03.mp4",
+      "/dances/dance-001/motions/motion-04.mp4",
+    ]);
+  });
+
   it("rejects an invalid dance or out-of-range action", () => {
     expect(teachingMotionClipUrl("../secret", 0)).toBeNull();
     expect(teachingMotionClipUrl("dance-001", 4)).toBeNull();

@@ -107,6 +107,8 @@ export type RealtimeDecisionReason =
   | 'MATCHED'
   | 'CLOSE_ENOUGH'
   | 'BELOW_THRESHOLD'
+  | 'ACTION_NOT_OBSERVED'
+  | 'CONFIRMATION_RETRY'
   | 'LOW_VISIBILITY'
   | 'INSUFFICIENT_OBSERVATION';
 
@@ -117,6 +119,7 @@ export interface RealtimeScoreBreakdown {
   rightHand?: number;
   trajectory?: number;
   keyframeTrajectory?: number;
+  actionCoverage?: number;
   visibility: number;
 }
 

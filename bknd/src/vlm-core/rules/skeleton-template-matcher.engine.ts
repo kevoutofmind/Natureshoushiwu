@@ -21,6 +21,7 @@ import {
 interface TemplateScore {
   templateId: string;
   scores: RealtimeScoreBreakdown;
+  actionSimilarity: number;
 }
 
 interface NormalizedPoint {
@@ -61,18 +62,25 @@ export class SkeletonTemplateMatcherEngine {
       'left_hand',
       'right_hand',
     ];
+    const visibilityParts: RequiredSkeletonPart[] = requiredParts.includes(
+      'pose',
+    )
+      ? ['pose']
+      : requiredParts;
     const visibility = this.requiredVisibility(
       input.observation.frames,
-      requiredParts,
+      visibilityParts,
     );
 
-    if (!this.hasRequiredVisibility(input.observation.frames, requiredParts)) {
+    if (
+      !this.hasRequiredVisibility(input.observation.frames, visibilityParts)
+    ) {
       return this.result(
         pack,
         input,
         'NOT_VISIBLE',
         'LOW_VISIBILITY',
-        '请稍微调整距离，让需要识别的上半身和双手完整出现在画面中。',
+        '请稍微调整距离，让上半身完整出现在画面中。',
         false,
         false,
         1,
@@ -87,11 +95,13 @@ export class SkeletonTemplateMatcherEngine {
         input.observation,
         requiredParts,
         pack.keyframes,
-        pack.evaluationPolicy?.keyframeTrajectoryWeight,
       ),
     );
     const best = templateScores.sort(
-      (left, right) => right.scores.overall - left.scores.overall,
+      (left, right) =>
+        (right.scores.actionCoverage ?? 0) -
+          (left.scores.actionCoverage ?? 0) ||
+        right.actionSimilarity - left.actionSimilarity,
     )[0];
     const scores = best?.scores ?? { overall: 0, visibility };
     scores.visibility = visibility;
@@ -127,37 +137,13 @@ export class SkeletonTemplateMatcherEngine {
       );
     }
 
-    const acceptThreshold =
-      pack.evaluationPolicy?.acceptThreshold ??
-      TEMPLATE_MATCHER_CONFIG.acceptThreshold;
-    const acceptWithHintThreshold =
-      pack.evaluationPolicy?.acceptWithHintThreshold ??
-      TEMPLATE_MATCHER_CONFIG.acceptWithHintThreshold;
-
-    if (scores.overall >= acceptThreshold) {
+    if ((scores.actionCoverage ?? 0) >= 1) {
       return this.result(
         pack,
         input,
         'ACCEPT',
         'MATCHED',
-        pack.acceptSpeech ?? '很好，这个动作完成了，我们进入下一个动作。',
-        true,
-        false,
-        scores.overall,
-        scores,
-        startedAt,
-        best?.templateId,
-        weakestPart,
-      );
-    }
-
-    if (scores.overall >= acceptWithHintThreshold) {
-      return this.result(
-        pack,
-        input,
-        'ACCEPT_HINT',
-        'CLOSE_ENOUGH',
-        pack.hintSpeech ?? this.gentleHint(weakestPart),
+        pack.acceptSpeech ?? '动作已经做出来了，很好，我们进入下一个动作。',
         true,
         false,
         scores.overall,
@@ -172,8 +158,8 @@ export class SkeletonTemplateMatcherEngine {
       pack,
       input,
       'RETRY',
-      'BELOW_THRESHOLD',
-      pack.retrySpeech ?? this.retryHint(weakestPart),
+      'ACTION_NOT_OBSERVED',
+      '这个时间段里还没有检测到完整的关键动作，我们重新做一次。',
       false,
       true,
       1 - scores.overall,
@@ -189,7 +175,6 @@ export class SkeletonTemplateMatcherEngine {
     observation: PracticeSkeletonObservation,
     requiredParts: RequiredSkeletonPart[],
     keyframes: MotionKeyframeDefinition[] | undefined,
-    configuredKeyframeWeight: number | undefined,
   ): TemplateScore {
     const practiceFrames =
       template.mirrored === observation.mirrored
@@ -216,12 +201,7 @@ export class SkeletonTemplateMatcherEngine {
     const sampledPractice = this.sampleFrames(practiceFrames, sampleCount);
     const sampledReference = this.sampleFrames(referenceFrames, sampleCount);
 
-    const pose = this.sequenceSimilarity(
-      sampledReference,
-      sampledPractice,
-      (frame) => this.normalizedPose(frame),
-      TEMPLATE_MATCHER_CONFIG.poseDistanceScale,
-    );
+    const pose = this.poseSimilarity(sampledReference, sampledPractice);
     const leftHand = this.sequenceSimilarity(
       sampledReference,
       sampledPractice,
@@ -246,32 +226,22 @@ export class SkeletonTemplateMatcherEngine {
       requiredParts,
       observation.progress,
     );
-    const visibility = this.requiredVisibility(practiceFrames, requiredParts);
-    const keyframeWeight =
-      configuredKeyframeWeight ??
-      TEMPLATE_MATCHER_CONFIG.keyframeTrajectoryWeight;
-    const components: Array<[number | undefined, number]> = [
-      [pose, 0.5],
-      [leftHand, requiredParts.includes('left_hand') ? 0.2 : 0.1],
-      [rightHand, requiredParts.includes('right_hand') ? 0.2 : 0.1],
-      [trajectory, 0.1],
-      [keyframeTrajectory, keyframeWeight],
-    ];
-    const available = components.filter(
-      (component): component is [number, number] =>
-        component[0] !== undefined && Number.isFinite(component[0]),
+    const actionEvidence = this.actionEvidence(
+      template.templateId,
+      referenceFrames,
+      practiceFrames,
+      keyframes,
+      observation.progress,
     );
-    const weight = available.reduce((sum, component) => sum + component[1], 0);
+    const visibility = this.requiredVisibility(practiceFrames, requiredParts);
     const overall =
-      weight === 0
-        ? 0
-        : available.reduce(
-            (sum, component) => sum + component[0] * component[1],
-            0,
-          ) / weight;
+      actionEvidence.coverage >= 1
+        ? Math.max(0.8, actionEvidence.similarity)
+        : Math.min(0.49, actionEvidence.coverage * 0.49);
 
     return {
       templateId: template.templateId,
+      actionSimilarity: actionEvidence.similarity,
       scores: {
         overall: this.round(overall),
         pose: this.optionalRound(pose),
@@ -279,6 +249,7 @@ export class SkeletonTemplateMatcherEngine {
         rightHand: this.optionalRound(rightHand),
         trajectory: this.optionalRound(trajectory),
         keyframeTrajectory: this.optionalRound(keyframeTrajectory),
+        actionCoverage: this.round(actionEvidence.coverage),
         visibility: this.round(visibility),
       },
     };
@@ -331,6 +302,184 @@ export class SkeletonTemplateMatcherEngine {
     if (pathLength === 0) return undefined;
     const averageDistance = costs[rows - 1][columns - 1] / pathLength;
     return Math.exp(-averageDistance / distanceScale);
+  }
+
+  private poseSimilarity(
+    referenceFrames: SkeletonFrame[],
+    practiceFrames: SkeletonFrame[],
+  ): number | undefined {
+    const landmarkDetail = this.sequenceSimilarity(
+      referenceFrames,
+      practiceFrames,
+      (frame) => this.normalizedPose(frame),
+      TEMPLATE_MATCHER_CONFIG.poseDistanceScale,
+    );
+    const bodyLayout = this.sequenceSimilarity(
+      referenceFrames,
+      practiceFrames,
+      (frame) => this.bodyLayoutFeatures(frame),
+      TEMPLATE_MATCHER_CONFIG.bodyLayoutDistanceScale,
+    );
+    const components: Array<[number | undefined, number]> = [
+      [bodyLayout, TEMPLATE_MATCHER_CONFIG.poseBodyLayoutWeight],
+      [landmarkDetail, TEMPLATE_MATCHER_CONFIG.poseLandmarkDetailWeight],
+    ];
+    const available = components.filter(
+      (component): component is [number, number] =>
+        component[0] !== undefined && Number.isFinite(component[0]),
+    );
+    const totalWeight = available.reduce(
+      (sum, component) => sum + component[1],
+      0,
+    );
+    return totalWeight === 0
+      ? undefined
+      : available.reduce(
+          (sum, component) => sum + component[0] * component[1],
+          0,
+        ) / totalWeight;
+  }
+
+  private actionEvidence(
+    templateId: string,
+    referenceFrames: SkeletonFrame[],
+    practiceFrames: SkeletonFrame[],
+    keyframes: MotionKeyframeDefinition[] | undefined,
+    observationProgress: number,
+  ): { coverage: number; similarity: number } {
+    if (referenceFrames.length < 2 || practiceFrames.length < 2) {
+      return { coverage: 0, similarity: 0 };
+    }
+
+    const annotatedAnchors = (keyframes ?? [])
+      .filter(
+        (keyframe) =>
+          keyframe.progress >= 0 &&
+          keyframe.progress <= Math.min(1, observationProgress),
+      )
+      .map((keyframe) => ({
+        referenceProgress:
+          keyframe.templateProgress?.[templateId] ?? keyframe.progress,
+        practiceProgress: keyframe.progress,
+      }));
+    const anchors =
+      annotatedAnchors.length > 0
+        ? annotatedAnchors
+        : [
+            {
+              referenceProgress: this.peakActionProgress(referenceFrames),
+              practiceProgress: this.peakActionProgress(referenceFrames),
+            },
+          ];
+
+    const events = anchors.map(({ referenceProgress, practiceProgress }) => {
+      const referenceWindow = this.timeWindow(
+        referenceFrames,
+        referenceProgress,
+        TEMPLATE_MATCHER_CONFIG.actionEventWindowMs,
+      );
+      const practiceWindow = this.timeWindow(
+        practiceFrames,
+        practiceProgress,
+        TEMPLATE_MATCHER_CONFIG.actionEventWindowMs,
+      );
+      const referenceAnchor = this.closestFrame(
+        referenceFrames,
+        referenceProgress,
+      );
+      const poseScores = practiceWindow
+        .map((frame) =>
+          referenceAnchor
+            ? this.poseSimilarity([referenceAnchor], [frame])
+            : undefined,
+        )
+        .filter((score): score is number => score !== undefined);
+      const poseSimilarity =
+        poseScores.length > 0 ? Math.max(...poseScores) : 0;
+      const referenceMovement = this.wristMotionAmplitude(referenceWindow);
+      const practiceMovement = this.wristMotionAmplitude(practiceWindow);
+      const movementThreshold =
+        referenceMovement < TEMPLATE_MATCHER_CONFIG.actionMovementFloor
+          ? 0
+          : Math.min(
+              TEMPLATE_MATCHER_CONFIG.actionMovementFloor,
+              referenceMovement * TEMPLATE_MATCHER_CONFIG.actionMovementRatio,
+            );
+      const observed =
+        poseSimilarity >=
+          TEMPLATE_MATCHER_CONFIG.actionPoseSimilarityThreshold &&
+        practiceMovement >= movementThreshold;
+      return { observed, poseSimilarity };
+    });
+
+    const observedCount = events.filter((event) => event.observed).length;
+    return {
+      coverage: observedCount / events.length,
+      similarity: this.average(events.map((event) => event.poseSimilarity)),
+    };
+  }
+
+  private peakActionProgress(frames: SkeletonFrame[]): number {
+    const first = this.bodyLayoutFeatures(frames[0]);
+    if (!first || frames.length < 2) return 0.5;
+    let bestIndex = Math.floor((frames.length - 1) / 2);
+    let bestDistance = -1;
+    for (let index = 1; index < frames.length; index += 1) {
+      const candidate = this.bodyLayoutFeatures(frames[index]);
+      if (!candidate) continue;
+      const distance = this.pointSetDistance(first, candidate);
+      if (distance > bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    }
+    return bestIndex / (frames.length - 1);
+  }
+
+  private timeWindow(
+    frames: SkeletonFrame[],
+    progress: number,
+    radiusMs: number,
+  ): SkeletonFrame[] {
+    if (frames.length === 0) return [];
+    const firstTimestamp = frames[0].timestampMs;
+    const lastTimestamp = frames[frames.length - 1].timestampMs;
+    const targetTimestamp =
+      firstTimestamp +
+      Math.max(0, Math.min(1, progress)) *
+        Math.max(0, lastTimestamp - firstTimestamp);
+    const window = frames.filter(
+      (frame) => Math.abs(frame.timestampMs - targetTimestamp) <= radiusMs,
+    );
+    const closest = this.closestFrame(frames, progress);
+    return window.length > 0 ? window : closest ? [closest] : [];
+  }
+
+  private closestFrame(
+    frames: SkeletonFrame[],
+    progress: number,
+  ): SkeletonFrame | undefined {
+    if (frames.length === 0) return undefined;
+    const index = Math.round(
+      Math.max(0, Math.min(1, progress)) * (frames.length - 1),
+    );
+    return frames[index];
+  }
+
+  private wristMotionAmplitude(frames: SkeletonFrame[]): number {
+    const poses = frames
+      .map((frame) => this.normalizedPose(frame))
+      .filter((pose): pose is NormalizedPoint[] => Boolean(pose));
+    if (poses.length < 2) return 0;
+    const first = poses[0];
+    return Math.max(
+      ...poses.map(
+        (pose) =>
+          (this.distance(pose[4], first[4]) +
+            this.distance(pose[5], first[5])) /
+          2,
+      ),
+    );
   }
 
   private trajectorySimilarity(
@@ -388,6 +537,110 @@ export class SkeletonTemplateMatcherEngine {
         z: ((point.z ?? 0) - center.z) / scale,
       };
     });
+  }
+
+  private bodyLayoutFeatures(
+    frame: SkeletonFrame,
+  ): NormalizedPoint[] | undefined {
+    const leftShoulder = frame.pose[11];
+    const rightShoulder = frame.pose[12];
+    const leftElbow = frame.pose[13];
+    const rightElbow = frame.pose[14];
+    const leftWrist = frame.pose[15];
+    const rightWrist = frame.pose[16];
+    const leftHip = frame.pose[23];
+    const rightHip = frame.pose[24];
+    if (
+      !leftShoulder ||
+      !rightShoulder ||
+      !leftElbow ||
+      !rightElbow ||
+      !leftWrist ||
+      !rightWrist ||
+      !leftHip ||
+      !rightHip
+    ) {
+      return undefined;
+    }
+
+    const shoulderWidth = this.distance(leftShoulder, rightShoulder);
+    if (shoulderWidth < 0.01) {
+      return undefined;
+    }
+    const shoulderCenter = this.midpoint(leftShoulder, rightShoulder);
+    const hipCenter = this.midpoint(leftHip, rightHip);
+    const bodyCenter = this.midpoint(shoulderCenter, hipCenter);
+    const relative = (point: SkeletonLandmark): NormalizedPoint => ({
+      x: this.clamp((point.x - shoulderCenter.x) / shoulderWidth, -4, 4),
+      y: this.clamp((point.y - shoulderCenter.y) / shoulderWidth, -4, 4),
+      z: this.clamp(((point.z ?? 0) - shoulderCenter.z) / shoulderWidth, -4, 4),
+    });
+    const leftWristPosition = relative(leftWrist);
+    const rightWristPosition = relative(rightWrist);
+    const features: NormalizedPoint[] = [
+      {
+        // Keep coarse framing information without letting camera placement
+        // outweigh the pose itself.
+        x: bodyCenter.x * 3,
+        y: bodyCenter.y * 3,
+        z: shoulderWidth * 3,
+      },
+      {
+        x: leftWristPosition.x,
+        y: leftWristPosition.y,
+        z: this.jointAngle(leftShoulder, leftElbow, leftWrist) / Math.PI,
+      },
+      {
+        x: rightWristPosition.x,
+        y: rightWristPosition.y,
+        z: this.jointAngle(rightShoulder, rightElbow, rightWrist) / Math.PI,
+      },
+      {
+        x: this.clamp((hipCenter.x - shoulderCenter.x) / shoulderWidth, -2, 2),
+        y: this.clamp((hipCenter.y - shoulderCenter.y) / shoulderWidth, -4, 4),
+        z: this.clamp(
+          (rightShoulder.y - leftShoulder.y) / shoulderWidth,
+          -2,
+          2,
+        ),
+      },
+      {
+        x: this.clamp(
+          this.distance(leftWrist, rightWrist) / shoulderWidth,
+          0,
+          8,
+        ),
+        y: this.clamp((leftWristPosition.y + rightWristPosition.y) / 2, -4, 4),
+        z: this.clamp((leftWrist.y - rightWrist.y) / shoulderWidth, -4, 4),
+      },
+    ];
+
+    const visibleFacePoints = [
+      frame.pose[0],
+      frame.pose[7],
+      frame.pose[8],
+    ].filter(
+      (point): point is SkeletonLandmark =>
+        Boolean(point) &&
+        (point.visibility ?? 1) >=
+          TEMPLATE_MATCHER_CONFIG.landmarkVisibilityThreshold,
+    );
+    if (visibleFacePoints.length > 0) {
+      const faceCenter = {
+        x: this.average(visibleFacePoints.map((point) => point.x)),
+        y: this.average(visibleFacePoints.map((point) => point.y)),
+        z: this.average(visibleFacePoints.map((point) => point.z ?? 0)),
+      };
+      for (const wrist of [leftWrist, rightWrist]) {
+        features.push({
+          x: this.clamp((wrist.x - faceCenter.x) / shoulderWidth, -5, 5),
+          y: this.clamp((wrist.y - faceCenter.y) / shoulderWidth, -5, 5),
+          z: this.clamp(this.distance(wrist, faceCenter) / shoulderWidth, 0, 8),
+        });
+      }
+    }
+
+    return features;
   }
 
   private normalizedHand(
@@ -497,12 +750,7 @@ export class SkeletonTemplateMatcherEngine {
     practiceSample: SkeletonFrame[],
     requiredParts: RequiredSkeletonPart[],
   ): number {
-    const pose = this.sequenceSimilarity(
-      referenceSample,
-      practiceSample,
-      (frame) => this.normalizedPose(frame),
-      TEMPLATE_MATCHER_CONFIG.poseDistanceScale,
-    );
+    const pose = this.poseSimilarity(referenceSample, practiceSample);
     const leftHand = this.sequenceSimilarity(
       referenceSample,
       practiceSample,
@@ -524,11 +772,12 @@ export class SkeletonTemplateMatcherEngine {
       this.sampleFrames(referenceSample, commonCount),
       this.sampleFrames(practiceSample, commonCount),
     );
+    const weights = TEMPLATE_MATCHER_CONFIG.keyframeScoreWeights;
     const components: Array<[number | undefined, number, boolean]> = [
-      [pose, 0.45, requiredParts.includes('pose')],
-      [leftHand, 0.15, requiredParts.includes('left_hand')],
-      [rightHand, 0.15, requiredParts.includes('right_hand')],
-      [trajectory, 0.25, false],
+      [pose, weights.pose, requiredParts.includes('pose')],
+      [leftHand, weights.leftHand, requiredParts.includes('left_hand')],
+      [rightHand, weights.rightHand, requiredParts.includes('right_hand')],
+      [trajectory, weights.trajectory, false],
     ];
     const available = components
       .map(
@@ -687,6 +936,56 @@ export class SkeletonTemplateMatcherEngine {
         (left.y - right.y) ** 2 +
         ((left.z ?? 0) - (right.z ?? 0)) ** 2,
     );
+  }
+
+  private midpoint(
+    left: Pick<SkeletonLandmark, 'x' | 'y' | 'z'>,
+    right: Pick<SkeletonLandmark, 'x' | 'y' | 'z'>,
+  ): NormalizedPoint {
+    return {
+      x: (left.x + right.x) / 2,
+      y: (left.y + right.y) / 2,
+      z: ((left.z ?? 0) + (right.z ?? 0)) / 2,
+    };
+  }
+
+  private jointAngle(
+    first: Pick<SkeletonLandmark, 'x' | 'y' | 'z'>,
+    vertex: Pick<SkeletonLandmark, 'x' | 'y' | 'z'>,
+    third: Pick<SkeletonLandmark, 'x' | 'y' | 'z'>,
+  ): number {
+    const firstVector = {
+      x: first.x - vertex.x,
+      y: first.y - vertex.y,
+      z: (first.z ?? 0) - (vertex.z ?? 0),
+    };
+    const thirdVector = {
+      x: third.x - vertex.x,
+      y: third.y - vertex.y,
+      z: (third.z ?? 0) - (vertex.z ?? 0),
+    };
+    const firstLength = Math.sqrt(
+      firstVector.x ** 2 + firstVector.y ** 2 + firstVector.z ** 2,
+    );
+    const thirdLength = Math.sqrt(
+      thirdVector.x ** 2 + thirdVector.y ** 2 + thirdVector.z ** 2,
+    );
+    if (firstLength < 0.0001 || thirdLength < 0.0001) {
+      return 0;
+    }
+    const cosine = this.clamp(
+      (firstVector.x * thirdVector.x +
+        firstVector.y * thirdVector.y +
+        firstVector.z * thirdVector.z) /
+        (firstLength * thirdLength),
+      -1,
+      1,
+    );
+    return Math.acos(cosine);
+  }
+
+  private clamp(value: number, minimum: number, maximum: number): number {
+    return Math.min(maximum, Math.max(minimum, value));
   }
 
   private subtract(

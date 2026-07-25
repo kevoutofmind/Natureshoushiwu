@@ -73,6 +73,7 @@ export class ReferenceDatasetService implements OnModuleInit {
     dataset: ReferenceDanceDataset,
     persist = true,
   ): Promise<ReferenceDatasetRegistrationResult> {
+    dataset = this.expandFourStageLesson(dataset);
     this.validate(dataset);
 
     for (const pack of dataset.templatePacks) {
@@ -118,6 +119,142 @@ export class ReferenceDatasetService implements OnModuleInit {
 
   private datasetFile(danceId: string): string {
     return join(this.dataRoot, danceId, 'processed', 'dataset.json');
+  }
+
+  private expandFourStageLesson(
+    source: ReferenceDanceDataset,
+  ): ReferenceDanceDataset {
+    if (
+      source.danceId !== 'cat' ||
+      source.templatePacks.length !== 1 ||
+      source.lesson.motions.length !== 1
+    ) {
+      return source;
+    }
+    const originalPack = source.templatePacks[0];
+    const sortedKeyframes = [...(originalPack.keyframes ?? [])].sort(
+      (left, right) => left.progress - right.progress,
+    );
+    if (sortedKeyframes.length < 4) return source;
+
+    const stageCount = 4;
+    const boundaries = [0];
+    for (let stage = 1; stage < stageCount; stage += 1) {
+      const splitIndex = Math.floor(
+        (stage * sortedKeyframes.length) / stageCount,
+      );
+      const left = sortedKeyframes[Math.max(0, splitIndex - 1)].progress;
+      const right =
+        sortedKeyframes[Math.min(sortedKeyframes.length - 1, splitIndex)]
+          .progress;
+      boundaries.push((left + right) / 2);
+    }
+    boundaries.push(1);
+
+    const originalMotion = source.lesson.motions[0];
+    const demoDurationMs =
+      originalMotion.demoEndMs - originalMotion.demoStartMs;
+    const templatePacks = Array.from({ length: stageCount }, (_, stage) => {
+      const start = boundaries[stage];
+      const end = boundaries[stage + 1];
+      const motionId = `${originalPack.motionId}-stage-${String(
+        stage + 1,
+      ).padStart(2, '0')}`;
+      const templateIds = new Map(
+        originalPack.templates.map((template) => [
+          template.templateId,
+          `${template.templateId}-stage-${stage + 1}`,
+        ]),
+      );
+      const templates = originalPack.templates.map((template) => {
+        const lastIndex = template.frames.length - 1;
+        const startIndex = Math.max(0, Math.floor(start * lastIndex));
+        const endIndex = Math.min(
+          lastIndex,
+          Math.max(startIndex + 1, Math.ceil(end * lastIndex)),
+        );
+        const frames = template.frames.slice(startIndex, endIndex + 1);
+        const firstTimestamp = frames[0]?.timestampMs ?? 0;
+        return {
+          ...template,
+          templateId: templateIds.get(template.templateId)!,
+          frames: frames.map((frame) => ({
+            ...frame,
+            timestampMs: Math.max(0, frame.timestampMs - firstTimestamp),
+          })),
+        };
+      });
+      const keyframes = sortedKeyframes
+        .filter(
+          (keyframe) =>
+            keyframe.progress >= start &&
+            (stage === stageCount - 1
+              ? keyframe.progress <= end
+              : keyframe.progress < end),
+        )
+        .map((keyframe) => ({
+          ...keyframe,
+          progress: this.localProgress(keyframe.progress, start, end),
+          templateProgress: Object.fromEntries(
+            originalPack.templates.map((template) => {
+              const originalProgress =
+                keyframe.templateProgress?.[template.templateId] ??
+                keyframe.progress;
+              return [
+                templateIds.get(template.templateId)!,
+                this.localProgress(originalProgress, start, end),
+              ];
+            }),
+          ),
+        }));
+
+      return {
+        ...originalPack,
+        motionId,
+        motionName: `${originalPack.motionName ?? 'cat 动作'} · 第 ${
+          stage + 1
+        } 段`,
+        instruction: `完整做出第 ${stage + 1} 个关键动作。`,
+        expectedDurationMs: Math.max(
+          1200,
+          Math.round(originalPack.expectedDurationMs * (end - start)),
+        ),
+        keyframes,
+        templates,
+      };
+    });
+
+    return {
+      ...source,
+      lesson: {
+        ...source.lesson,
+        policy: {
+          ...source.lesson.policy,
+          confirmationRetryEnabled: true,
+        },
+        motions: templatePacks.map((pack, stage) => ({
+          motionId: pack.motionId,
+          instruction: pack.instruction,
+          demoStartMs: Math.round(
+            originalMotion.demoStartMs + boundaries[stage] * demoDurationMs,
+          ),
+          demoEndMs: Math.round(
+            originalMotion.demoStartMs + boundaries[stage + 1] * demoDurationMs,
+          ),
+          demoPlaybackRate: originalMotion.demoPlaybackRate,
+        })),
+      },
+      templatePacks,
+      extraction: {
+        ...source.extraction,
+        motionCount: templatePacks.length,
+      },
+    };
+  }
+
+  private localProgress(progress: number, start: number, end: number): number {
+    if (end <= start) return 0.5;
+    return Math.max(0, Math.min(1, (progress - start) / (end - start)));
   }
 
   private async loadDatabaseDatasets(): Promise<ReferenceDanceDataset[]> {

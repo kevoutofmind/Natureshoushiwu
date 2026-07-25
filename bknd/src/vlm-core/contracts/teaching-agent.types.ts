@@ -28,6 +28,7 @@ export interface TeachingLessonPolicy {
   maxRetriesPerMotion?: number;
   allowVoiceSkip?: boolean;
   autoAdvanceAfterMaxRetries?: boolean;
+  confirmationRetryEnabled?: boolean;
 }
 
 /**

@@ -33,7 +33,6 @@ import type {
 } from "../contracts/teaching-runtime";
 import { executeVideoVoiceCommand } from "../voiceCommandExecution";
 import {
-  decideRealtimeSimilarity,
   getReferenceDataset,
   registerReferenceDataset,
   sendTeachingAgentEvent,
@@ -43,7 +42,7 @@ import {
 import {
   TEACHING_MOTION_CLIP_COUNT,
   teachingMotionClipUrl,
-} from '../motion-video-catalog';
+} from "../motion-video-catalog";
 
 interface UseTeachingRuntimeOptions {
   danceId: string;
@@ -52,12 +51,7 @@ interface UseTeachingRuntimeOptions {
 }
 
 export type ChallengeStage =
-  | "idle"
-  | "slow"
-  | "review"
-  | "targeted-replay"
-  | "fast"
-  | "complete";
+  "idle" | "slow" | "review" | "targeted-replay" | "fast" | "complete";
 
 export interface SlowPracticeReview {
   weakMotionIndex: number | null;
@@ -86,26 +80,27 @@ export function useTeachingRuntime({
   const [latestSpeech, setLatestSpeech] = useState("");
   const [latestJudgeResult, setLatestJudgeResult] =
     useState<RealtimeJudgeFeedback>();
-  const [challengeStage, setChallengeStage] =
-    useState<ChallengeStage>("idle");
+  const [challengeStage, setChallengeStage] = useState<ChallengeStage>("idle");
   const [slowPracticeReview, setSlowPracticeReview] =
     useState<SlowPracticeReview | null>(null);
   const [lessonMotions, setLessonMotions] = useState<
     Array<{ motionId: string; instruction: string }>
   >([]);
-  const [activePlaybackVideoUrl, setActivePlaybackVideoUrl] = useState('');
-  const [activeMotionClipIndex, setActiveMotionClipIndex] = useState<number | null>(null);
+  const [activePlaybackVideoUrl, setActivePlaybackVideoUrl] = useState("");
+  const [activeMotionClipIndex, setActiveMotionClipIndex] = useState<
+    number | null
+  >(null);
   const datasetRef = useRef<ReferenceDanceDataset | null>(null);
-  const originalVideoUrlRef = useRef('');
+  const originalVideoUrlRef = useRef("");
   const sessionRef = useRef<TeachingAgentSession | null>(null);
   const eventSequenceRef = useRef(0);
   const evaluatingRef = useRef(false);
-  const evaluationStartedAtRef = useRef(0);
-  const engineeringStartedAtRef = useRef(0);
   const frameBufferRef = useRef<SkeletonSnapshot[]>([]);
   const lastBufferedAtRef = useRef(0);
-  const lastObservationAtRef = useRef(0);
-  const observationPendingRef = useRef(false);
+  const evaluationTimerRef = useRef<number | null>(null);
+  const stageSubmissionRef = useRef<
+    (motionId: string, durationMs: number) => Promise<void>
+  >(async () => undefined);
   const playbackCleanupRef = useRef<(() => void) | null>(null);
   const challengeCommandRef = useRef<TeachingAgentCommand | null>(null);
   const slowPracticeActiveRef = useRef(false);
@@ -163,7 +158,7 @@ export function useTeachingRuntime({
         sessionRef.current?.currentMotionIndex ?? -1,
       );
       const motionClipUrl =
-        command.tool === 'PLAY_MOTION_DEMO'
+        command.tool === "PLAY_MOTION_DEMO"
           ? teachingMotionClipUrl(danceId, requestedMotionIndex)
           : null;
       const originalVideoUrl = originalVideoUrlRef.current;
@@ -199,8 +194,7 @@ export function useTeachingRuntime({
       video.currentTime = Math.max(0, startMs / 1000);
       video.playbackRate = Math.max(0.25, Math.min(2, playbackRate));
       video.muted = !(
-        status.state === "slow-practice" ||
-        status.state === "fast-challenge"
+        status.state === "slow-practice" || status.state === "fast-challenge"
       );
       setRuntimeStatus(status);
 
@@ -232,10 +226,7 @@ export function useTeachingRuntime({
       try {
         await video.play();
       } catch (error: unknown) {
-        if (
-          error instanceof DOMException &&
-          error.name === "NotAllowedError"
-        ) {
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
           setRuntimeStatus({
             ...status,
             message: `${status.message} 点击“开始练习”后继续播放。`,
@@ -252,6 +243,90 @@ export function useTeachingRuntime({
   const executeCommandsRef = useRef<
     ((turn: TeachingAgentTurnResult) => Promise<void>) | null
   >(null);
+  const clearStageEvaluationTimer = useCallback(() => {
+    if (evaluationTimerRef.current !== null) {
+      window.clearTimeout(evaluationTimerRef.current);
+      evaluationTimerRef.current = null;
+    }
+  }, []);
+  const beginStageCollection = useCallback(
+    (motionId: string, durationMs: number, retrying = false) => {
+      clearStageEvaluationTimer();
+      evaluatingRef.current = true;
+      frameBufferRef.current = [];
+      lastBufferedAtRef.current = 0;
+      if (!retrying) setLatestJudgeResult(undefined);
+      setRuntimeStatus({
+        state: "practice",
+        message: retrying
+          ? "刚才没有采到完整骨架，请把当前动作完整做一遍，结束后统一评估。"
+          : "请完整做完当前动作，系统会在动作结束后统一评估。",
+      });
+      evaluationTimerRef.current = window.setTimeout(
+        () => void stageSubmissionRef.current(motionId, durationMs),
+        Math.max(1200, durationMs),
+      );
+    },
+    [clearStageEvaluationTimer],
+  );
+  const submitStageEvaluation = useCallback(
+    async (motionId: string, durationMs: number) => {
+      evaluationTimerRef.current = null;
+      const currentSession = sessionRef.current;
+      if (
+        !evaluatingRef.current ||
+        !currentSession ||
+        currentSession.phase !== "PRACTICE" ||
+        currentSession.currentMotionId !== motionId
+      ) {
+        return;
+      }
+
+      evaluatingRef.current = false;
+      const frames = [...frameBufferRef.current];
+      const firstTimestamp = frames[0]?.timestampMs ?? 0;
+      const observationFrames = frames.map((frame) => ({
+        timestampMs: Math.max(
+          0,
+          Math.round(frame.timestampMs - firstTimestamp),
+        ),
+        pose: frame.pose,
+        ...(frame.leftHand.length >= 21 ? { leftHand: frame.leftHand } : {}),
+        ...(frame.rightHand.length >= 21 ? { rightHand: frame.rightHand } : {}),
+      }));
+
+      setRuntimeStatus({
+        state: "practice",
+        message: "当前动作已完成，正在评估整段动作…",
+      });
+
+      try {
+        const turn = await sendEvent({
+          type: "REALTIME_OBSERVATION",
+          sampleId: `stage-${motionId}-${Date.now()}`,
+          observation: {
+            mirrored: true,
+            progress: 1,
+            frames: observationFrames,
+          },
+        });
+        await executeCommandsRef.current?.(turn);
+        const judge = turn.session.latestJudgeResult;
+        if (
+          turn.session.phase === "PRACTICE" &&
+          (judge?.decision === "KEEP_WATCHING" ||
+            judge?.decision === "NOT_VISIBLE")
+        ) {
+          beginStageCollection(motionId, durationMs, true);
+        }
+      } catch (error: unknown) {
+        setRuntimeStatus({ state: "error", message: errorMessage(error) });
+      }
+    },
+    [beginStageCollection, sendEvent],
+  );
+  stageSubmissionRef.current = submitStageEvaluation;
+
   const executeTurn = useCallback(
     async (turn: TeachingAgentTurnResult) => {
       sessionRef.current = turn.session;
@@ -302,7 +377,8 @@ export function useTeachingRuntime({
               },
               {
                 state: "slow-practice",
-                message: "0.65 倍慢速连贯练习中；这一遍不中断，结束后再集中反馈。",
+                message:
+                  "0.65 倍慢速连贯练习中；这一遍不中断，结束后再集中反馈。",
               },
               async () => {
                 slowPracticeActiveRef.current = false;
@@ -321,16 +397,19 @@ export function useTeachingRuntime({
             );
             break;
           case "START_REALTIME_EVALUATION":
-            evaluatingRef.current = true;
-            evaluationStartedAtRef.current = performance.now();
-            lastObservationAtRef.current = 0;
-            frameBufferRef.current = [];
-            setRuntimeStatus({
-              state: "practice",
-              message: "轮到你做当前动作，系统正在本地实时判断。",
-            });
+            {
+              const motionId = sessionRef.current?.currentMotionId;
+              const durationMs =
+                datasetRef.current?.templatePacks.find(
+                  (pack) => pack.motionId === motionId,
+                )?.expectedDurationMs ?? 3000;
+              if (motionId) {
+                beginStageCollection(motionId, durationMs);
+              }
+            }
             break;
           case "STOP_REALTIME_EVALUATION":
+            clearStageEvaluationTimer();
             evaluatingRef.current = false;
             frameBufferRef.current = [];
             break;
@@ -346,6 +425,7 @@ export function useTeachingRuntime({
             speak(stringArgument(command.arguments.speech));
             break;
           case "SESSION_COMPLETED":
+            clearStageEvaluationTimer();
             evaluatingRef.current = false;
             setRuntimeStatus({
               state: "completed",
@@ -360,7 +440,15 @@ export function useTeachingRuntime({
         }
       }
     },
-    [applyFeedback, playRange, referenceVideoRef, sendEvent, speak],
+    [
+      applyFeedback,
+      beginStageCollection,
+      clearStageEvaluationTimer,
+      playRange,
+      referenceVideoRef,
+      sendEvent,
+      speak,
+    ],
   );
   useEffect(() => {
     executeCommandsRef.current = executeTurn;
@@ -373,6 +461,7 @@ export function useTeachingRuntime({
 
   const prepare = useCallback(async () => {
     playbackCleanupRef.current?.();
+    clearStageEvaluationTimer();
     evaluatingRef.current = false;
     challengeCommandRef.current = null;
     slowPracticeActiveRef.current = false;
@@ -381,7 +470,6 @@ export function useTeachingRuntime({
     setSlowPracticeReview(null);
     setLatestJudgeResult(undefined);
     frameBufferRef.current = [];
-    engineeringStartedAtRef.current = performance.now();
     setRuntimeStatus({
       state: "preparing-dataset",
       message: "正在准备本地骨骼模板…",
@@ -431,12 +519,13 @@ export function useTeachingRuntime({
     } catch (error: unknown) {
       setRuntimeStatus({ state: "error", message: errorMessage(error) });
     }
-  }, [danceId, executeTurn]);
+  }, [clearStageEvaluationTimer, danceId, executeTurn]);
 
   const ingestSkeleton = useCallback(
     (snapshot: SkeletonSnapshot) => {
       if (slowPracticeActiveRef.current) {
-        const videoTimeMs = (referenceVideoRef.current?.currentTime ?? 0) * 1000;
+        const videoTimeMs =
+          (referenceVideoRef.current?.currentTime ?? 0) * 1000;
         if (videoTimeMs > 0) {
           slowPracticeSamplesRef.current = [
             ...slowPracticeSamplesRef.current.slice(-359),
@@ -444,99 +533,16 @@ export function useTeachingRuntime({
           ];
         }
       }
+      if (!evaluatingRef.current) return;
       const now = performance.now();
       if (now - lastBufferedAtRef.current < 100) return;
       lastBufferedAtRef.current = now;
-      frameBufferRef.current = [...frameBufferRef.current.slice(-239), snapshot];
-      const currentSession = sessionRef.current;
-      const dataset = datasetRef.current;
-      if (!currentSession || !dataset) return;
-
-      if (engineeringStartedAtRef.current === 0) {
-        engineeringStartedAtRef.current = now;
-      }
-      const startedAt = evaluatingRef.current
-        ? evaluationStartedAtRef.current
-        : engineeringStartedAtRef.current;
-      const elapsedMs = Math.max(0, now - startedAt);
-      if (
-        elapsedMs < 650 ||
-        now - lastObservationAtRef.current < 450 ||
-        observationPendingRef.current ||
-        frameBufferRef.current.length < 6
-      ) {
-        return;
-      }
-
-      lastObservationAtRef.current = now;
-      observationPendingRef.current = true;
-      const durationMs =
-        dataset.templatePacks.find(
-          (pack) => pack.motionId === currentSession?.currentMotionId,
-        )?.expectedDurationMs ?? 3000;
-      const firstTimestamp = frameBufferRef.current[0].timestampMs;
-      const observationFrames = frameBufferRef.current.map((frame) => ({
-        timestampMs: Math.max(
-          0,
-          Math.round(frame.timestampMs - firstTimestamp),
-        ),
-        pose: frame.pose,
-        ...(frame.leftHand.length >= 21
-          ? { leftHand: frame.leftHand }
-          : {}),
-        ...(frame.rightHand.length >= 21
-          ? { rightHand: frame.rightHand }
-          : {}),
-      }));
-      const referenceVideo = referenceVideoRef.current;
-      const referenceProgress =
-        referenceVideo &&
-        Number.isFinite(referenceVideo.duration) &&
-        referenceVideo.duration > 0
-          ? referenceVideo.currentTime / referenceVideo.duration
-          : elapsedMs / durationMs;
-      const observation = {
-        mirrored: false,
-        progress: Math.max(
-          0,
-          Math.min(
-            1,
-            evaluatingRef.current ? elapsedMs / durationMs : referenceProgress,
-          ),
-        ),
-        frames: observationFrames,
-      };
-      const sampleId = `sample-${Date.now()}`;
-
-      const request = evaluatingRef.current
-        ? sendEvent({
-        type: "REALTIME_OBSERVATION",
-            sampleId,
-            observation,
-          }).then(executeTurn)
-        : decideRealtimeSimilarity({
-            sessionId: currentSession.sessionId,
-            sampleId,
-            danceId,
-            motionId: currentSession.currentMotionId,
-            attemptIndex: currentSession.attemptIndex,
-            observation,
-          }).then(setLatestJudgeResult);
-
-      void request
-        .catch((error: unknown) => {
-          if (evaluatingRef.current) {
-            setRuntimeStatus({
-              state: "error",
-              message: errorMessage(error),
-            });
-          }
-        })
-        .finally(() => {
-          observationPendingRef.current = false;
-        });
+      frameBufferRef.current = [
+        ...frameBufferRef.current.slice(-239),
+        snapshot,
+      ];
     },
-    [danceId, executeTurn, referenceVideoRef, sendEvent],
+    [referenceVideoRef],
   );
 
   const replayWeakMotion = useCallback(async () => {
@@ -627,23 +633,23 @@ export function useTeachingRuntime({
 
       const currentMotionIndex =
         activeMotionClipIndex ?? sessionRef.current?.currentMotionIndex ?? 0;
-      if (intent === 'PREVIOUS_ACTION') {
+      if (intent === "PREVIOUS_ACTION") {
         void playTeachingMotionClipRef.current(
           Math.max(0, currentMotionIndex - 1),
         );
         return;
       }
-      if (intent === 'NEXT_ACTION') {
+      if (intent === "NEXT_ACTION") {
         void playTeachingMotionClipRef.current(
           Math.min(TEACHING_MOTION_CLIP_COUNT - 1, currentMotionIndex + 1),
         );
         return;
       }
-      if (intent === 'REPEAT_ACTION') {
+      if (intent === "REPEAT_ACTION") {
         void playTeachingMotionClipRef.current(currentMotionIndex);
         return;
       }
-      if (intent === 'RESTART_LESSON') {
+      if (intent === "RESTART_LESSON") {
         void playTeachingMotionClipRef.current(0);
         return;
       }
@@ -714,8 +720,8 @@ export function useTeachingRuntime({
     async (motionIndex: number) => {
       if (!teachingMotionClipUrl(danceId, motionIndex)) {
         setRuntimeStatus({
-          state: 'error',
-          message: '这个动作暂时没有可播放的视频切片。',
+          state: "error",
+          message: "这个动作暂时没有可播放的视频切片。",
         });
         return;
       }
@@ -724,7 +730,7 @@ export function useTeachingRuntime({
         await playRange(
           {
             commandId: `manual-motion-clip-${motionIndex}-${Date.now()}`,
-            tool: 'PLAY_MOTION_DEMO',
+            tool: "PLAY_MOTION_DEMO",
             arguments: {
               motionIndex,
               startMs: 0,
@@ -734,18 +740,18 @@ export function useTeachingRuntime({
             blocking: true,
           },
           {
-            state: 'demo',
+            state: "demo",
             message: `正在教学第 ${motionIndex + 1} 个动作，再点一次可以重新播放。`,
           },
           async () => {
             setRuntimeStatus({
-              state: 'ready',
+              state: "ready",
               message: `第 ${motionIndex + 1} 个动作播放完成，可以选择其他动作继续学习。`,
             });
           },
         );
       } catch (error: unknown) {
-        setRuntimeStatus({ state: 'error', message: errorMessage(error) });
+        setRuntimeStatus({ state: "error", message: errorMessage(error) });
       }
     },
     [danceId, playRange],
@@ -755,9 +761,10 @@ export function useTeachingRuntime({
   useEffect(
     () => () => {
       playbackCleanupRef.current?.();
+      clearStageEvaluationTimer();
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     },
-    [],
+    [clearStageEvaluationTimer],
   );
 
   return {
@@ -907,7 +914,7 @@ async function loadPlaybackSource(
   video: HTMLVideoElement,
   sourceUrl: string,
 ): Promise<void> {
-  if (!sourceUrl) throw new Error('参考视频地址为空。');
+  if (!sourceUrl) throw new Error("参考视频地址为空。");
   const requestedUrl = new URL(sourceUrl, window.location.href).href;
   const currentUrl = video.currentSrc || video.src;
   if (currentUrl !== requestedUrl) {

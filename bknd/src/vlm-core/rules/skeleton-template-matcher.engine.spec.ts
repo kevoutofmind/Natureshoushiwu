@@ -17,6 +17,43 @@ describe('SkeletonTemplateMatcherEngine', () => {
     expect(result.scores.overall).toBeGreaterThanOrEqual(0.78);
   });
 
+  it('accepts an approximate action when the movement appears in its time window', () => {
+    const input = createRealtimeJudgeFixture('correct');
+    const firstLeftWrist = input.observation.frames[0].pose[15];
+    const firstRightWrist = input.observation.frames[0].pose[16];
+    for (const frame of input.observation.frames) {
+      frame.pose[15] = {
+        ...frame.pose[15],
+        x: firstLeftWrist.x + (frame.pose[15].x - firstLeftWrist.x) * 0.6,
+      };
+      frame.pose[16] = {
+        ...frame.pose[16],
+        x: firstRightWrist.x + (frame.pose[16].x - firstRightWrist.x) * 0.6,
+      };
+    }
+
+    const result = engine.evaluate(pack, input);
+
+    expect(result.decision).toBe('ACCEPT');
+    expect(result.scores.actionCoverage).toBe(1);
+  });
+
+  it('rejects a stage when the expected movement never happens', () => {
+    const input = createRealtimeJudgeFixture('correct');
+    const restingPose = input.observation.frames[0].pose.map((point) => ({
+      ...point,
+    }));
+    for (const frame of input.observation.frames) {
+      frame.pose = restingPose.map((point) => ({ ...point }));
+    }
+
+    const result = engine.evaluate(pack, input);
+
+    expect(result.decision).toBe('RETRY');
+    expect(result.reason).toBe('ACTION_NOT_OBSERVED');
+    expect(result.scores.actionCoverage).toBe(0);
+  });
+
   it('keeps watching before the semantic motion unit is complete', () => {
     const result = engine.evaluate(
       pack,
@@ -54,6 +91,132 @@ describe('SkeletonTemplateMatcherEngine', () => {
 
     expect(result.decision).toBe('ACCEPT');
     expect(result.scores.visibility).toBeGreaterThanOrEqual(0.99);
+  });
+
+  it('keeps body-led matches high when only hand shapes differ', () => {
+    const input = createRealtimeJudgeFixture('correct');
+    for (const frame of input.observation.frames) {
+      frame.leftHand = distortHand(frame.leftHand);
+      frame.rightHand = distortHand(frame.rightHand);
+    }
+
+    const result = engine.evaluate(pack, input);
+
+    expect(result.decision).toBe('ACCEPT');
+    expect(result.scores.overall).toBeGreaterThanOrEqual(0.78);
+    expect(result.scores.pose ?? 0).toBeGreaterThan(
+      result.scores.leftHand ?? 1,
+    );
+  });
+
+  it('stays stable when isolated pose landmarks jitter slightly', () => {
+    const baseline = engine.evaluate(
+      pack,
+      createRealtimeJudgeFixture('correct'),
+    );
+    const input = createRealtimeJudgeFixture('correct');
+    for (const [index, frame] of input.observation.frames.entries()) {
+      frame.pose[13] = {
+        ...frame.pose[13],
+        x: frame.pose[13].x + (index % 2 === 0 ? 0.025 : -0.025),
+        y: frame.pose[13].y + (index % 3 === 0 ? 0.02 : -0.01),
+      };
+    }
+
+    const result = engine.evaluate(pack, input);
+
+    expect(result.decision).toBe('ACCEPT');
+    expect(result.scores.pose ?? 0).toBeGreaterThanOrEqual(
+      (baseline.scores.pose ?? 0) - 0.05,
+    );
+  });
+
+  it('penalizes coarse body placement mismatches', () => {
+    const baseline = engine.evaluate(
+      pack,
+      createRealtimeJudgeFixture('correct'),
+    );
+    const input = createRealtimeJudgeFixture('correct');
+    for (const frame of input.observation.frames) {
+      frame.pose = frame.pose.map((landmark) => ({
+        ...landmark,
+        x: landmark.x + 0.3,
+        y: landmark.y + 0.15,
+      }));
+      frame.leftHand = frame.leftHand?.map((landmark) => ({
+        ...landmark,
+        x: landmark.x + 0.3,
+        y: landmark.y + 0.15,
+      }));
+      frame.rightHand = frame.rightHand?.map((landmark) => ({
+        ...landmark,
+        x: landmark.x + 0.3,
+        y: landmark.y + 0.15,
+      }));
+    }
+
+    const result = engine.evaluate(pack, input);
+
+    expect(result.scores.pose ?? 1).toBeLessThan(
+      (baseline.scores.pose ?? 0) - 0.15,
+    );
+    expect(result.scores.overall).toBeLessThan(baseline.scores.overall - 0.08);
+  });
+
+  it('penalizes bilateral hand-height mismatches as an overall pose error', () => {
+    const baseline = engine.evaluate(
+      pack,
+      createRealtimeJudgeFixture('correct'),
+    );
+    const input = createRealtimeJudgeFixture('correct');
+    for (const frame of input.observation.frames) {
+      frame.pose[15] = {
+        ...frame.pose[15],
+        y: frame.pose[15].y - 0.25,
+      };
+      frame.pose[16] = {
+        ...frame.pose[16],
+        y: frame.pose[16].y - 0.25,
+      };
+      frame.leftHand = frame.leftHand?.map((landmark) => ({
+        ...landmark,
+        y: landmark.y - 0.25,
+      }));
+      frame.rightHand = frame.rightHand?.map((landmark) => ({
+        ...landmark,
+        y: landmark.y - 0.25,
+      }));
+    }
+
+    const result = engine.evaluate(pack, input);
+
+    expect(result.scores.pose ?? 1).toBeLessThan(
+      (baseline.scores.pose ?? 0) - 0.25,
+    );
+    expect(result.scores.overall).toBeLessThan(baseline.scores.overall - 0.1);
+  });
+
+  it('uses the face-to-hand relationship in the overall pose score', () => {
+    const baseline = engine.evaluate(
+      pack,
+      createRealtimeJudgeFixture('correct'),
+    );
+    const input = createRealtimeJudgeFixture('correct');
+    for (const frame of input.observation.frames) {
+      for (const index of [0, 7, 8]) {
+        frame.pose[index] = {
+          ...frame.pose[index],
+          x: frame.pose[index].x + 0.2,
+          y: frame.pose[index].y + 0.15,
+        };
+      }
+    }
+
+    const result = engine.evaluate(pack, input);
+
+    expect(result.scores.pose ?? 1).toBeLessThan(
+      (baseline.scores.pose ?? 0) - 0.15,
+    );
   });
 
   it('retries a completed observation that differs strongly from references', () => {
@@ -108,3 +271,17 @@ describe('SkeletonTemplateMatcherEngine', () => {
     );
   });
 });
+
+function distortHand<T extends { x: number; y: number }>(
+  landmarks: T[] | undefined,
+): T[] | undefined {
+  return landmarks?.map((landmark, index) =>
+    index === 0
+      ? landmark
+      : {
+          ...landmark,
+          x: landmark.x + Math.cos(index) * 0.08,
+          y: landmark.y + Math.sin(index) * 0.08,
+        },
+  );
+}

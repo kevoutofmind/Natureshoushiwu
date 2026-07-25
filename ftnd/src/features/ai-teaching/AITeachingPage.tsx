@@ -7,13 +7,7 @@ import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlin
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import TroubleshootRoundedIcon from "@mui/icons-material/TroubleshootRounded";
-import {
-  Alert,
-  Box,
-  Button,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Stack, Typography } from "@mui/material";
 import { useRouter } from "next/navigation";
 import { saveDraft } from "@/features/drafts/draft-store";
 import { SkeletonOverlay } from "@/features/video-stage/components/SkeletonOverlay";
@@ -48,7 +42,7 @@ import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
 
-import { teachingMotionClipUrls } from './motion-video-catalog';
+import { teachingMotionClipUrls } from "./motion-video-catalog";
 
 const FULL_FRAME_STREAK = 3;
 
@@ -60,10 +54,10 @@ function landmarkConfidence(
 
 function handConfidence(hand: SkeletonSnapshot["leftHand"]) {
   if (hand.length < 15) return 0;
-  return hand.reduce(
-    (sum, landmark) => sum + landmarkConfidence(landmark),
-    0,
-  ) / hand.length;
+  return (
+    hand.reduce((sum, landmark) => sum + landmarkConfidence(landmark), 0) /
+    hand.length
+  );
 }
 
 function hasStableFullFrame(snapshot: SkeletonSnapshot) {
@@ -493,10 +487,7 @@ export default function AITeachingPage({
         setError("左侧示例视频无法自动播放，请点击视频后重试。");
       });
     }
-    if (
-      !teachingSession &&
-      runtimeStatus.state !== "preparing-dataset"
-    ) {
+    if (!teachingSession && runtimeStatus.state !== "preparing-dataset") {
       void prepareTeaching();
     }
   };
@@ -540,7 +531,10 @@ export default function AITeachingPage({
 
   return (
     <Box className="teaching-page">
-      <Box className="teaching-header teaching-header-spacer" aria-hidden="true" />
+      <Box
+        className="teaching-header teaching-header-spacer"
+        aria-hidden="true"
+      />
 
       {(visionState === "loading" || visionError) && (
         <Alert
@@ -578,7 +572,7 @@ export default function AITeachingPage({
             motionVideoUrls={motionClipUrls}
             activeMotionIndex={activeMotionClipIndex}
             onSelectMotion={(motionIndex) => {
-              setError('');
+              setError("");
               void playTeachingMotionClip(motionIndex);
             }}
           />
@@ -699,9 +693,7 @@ export default function AITeachingPage({
                   />
                 )}
                 {error && <Box className="stage-error">{error}</Box>}
-                {!previewUrl && (
-                  <RecordingEffectsPicker />
-                )}
+                {!previewUrl && <RecordingEffectsPicker />}
                 <VlmStageFeedbackOverlay
                   actionIndex={actionIndex}
                   reaction={vlmReaction}
@@ -734,7 +726,7 @@ export default function AITeachingPage({
                   onClick={startRecording}
                   startIcon={<FiberManualRecordRoundedIcon />}
                 >
-                  开始录制并启动 AI 教学
+                  开始录制并进入 AI 教学
                 </Button>
               )}
               {recordingState === "recording" && (
@@ -744,7 +736,7 @@ export default function AITeachingPage({
                   onClick={stopRecording}
                   startIcon={<StopCircleRoundedIcon />}
                 >
-                  停止录制
+                  结束本次录制
                 </Button>
               )}
               {recordingState === "recorded" && (
@@ -785,16 +777,12 @@ export default function AITeachingPage({
               <Button
                 variant="outlined"
                 color="info"
-                onClick={() =>
-                  setSimilarityDialogOpen((current) => !current)
-                }
+                onClick={() => setSimilarityDialogOpen((current) => !current)}
                 startIcon={<TroubleshootRoundedIcon />}
               >
-                {similarityDialogOpen ? "关闭工程窗口" : "工程：轨迹相似度"}
+                {similarityDialogOpen ? "关闭工程窗口" : "工程：动作整体评分"}
                 {latestJudgeResult
-                  ? ` ${Math.round(
-                      latestJudgeResult.scores.overall * 100,
-                    )}%`
+                  ? ` ${Math.round(latestJudgeResult.scores.overall * 100)}%`
                   : ""}
               </Button>
               <Box className="studio-voice-control">

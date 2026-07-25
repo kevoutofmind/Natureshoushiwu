@@ -1,30 +1,30 @@
 import type {
   SkeletonSnapshot,
   VisionLandmark,
-} from '@/features/video-stage/vision-types';
+} from "@/features/video-stage/vision-types";
 
 export type TeachingVoiceCommand =
-  | 'PAUSE'
-  | 'RESUME'
-  | 'READY'
-  | 'PREVIOUS_ACTION'
-  | 'REPEAT_ACTION'
-  | 'NEXT_ACTION'
-  | 'RESTART_LESSON';
+  | "PAUSE"
+  | "RESUME"
+  | "READY"
+  | "PREVIOUS_ACTION"
+  | "REPEAT_ACTION"
+  | "NEXT_ACTION"
+  | "RESTART_LESSON";
 
 export type TeachingAgentTool =
-  | 'PLAY_FULL_PREVIEW'
-  | 'PLAY_MOTION_DEMO'
-  | 'PAUSE_PLAYBACK'
-  | 'RESUME_PLAYBACK'
-  | 'START_REALTIME_EVALUATION'
-  | 'STOP_REALTIME_EVALUATION'
-  | 'START_FULL_CHALLENGE'
-  | 'SPEAK'
-  | 'SHOW_HINT'
-  | 'REQUEST_CLOUD_COACHING'
-  | 'REQUEST_CLOUD_SUMMARY'
-  | 'SESSION_COMPLETED';
+  | "PLAY_FULL_PREVIEW"
+  | "PLAY_MOTION_DEMO"
+  | "PAUSE_PLAYBACK"
+  | "RESUME_PLAYBACK"
+  | "START_REALTIME_EVALUATION"
+  | "STOP_REALTIME_EVALUATION"
+  | "START_FULL_CHALLENGE"
+  | "SPEAK"
+  | "SHOW_HINT"
+  | "REQUEST_CLOUD_COACHING"
+  | "REQUEST_CLOUD_SUMMARY"
+  | "SESSION_COMPLETED";
 
 export interface TeachingAgentCommand {
   commandId: string;
@@ -37,24 +37,23 @@ export interface TeachingAgentCommand {
 export interface RealtimeJudgeFeedback {
   sampleId: string;
   motionId: string;
-  decision: 'ACCEPT' | 'ACCEPT_HINT' | 'RETRY' | 'KEEP_WATCHING' | 'NOT_VISIBLE';
+  decision:
+    "ACCEPT" | "ACCEPT_HINT" | "RETRY" | "KEEP_WATCHING" | "NOT_VISIBLE";
   reason:
-    | 'MATCHED'
-    | 'CLOSE_ENOUGH'
-    | 'BELOW_THRESHOLD'
-    | 'LOW_VISIBILITY'
-    | 'INSUFFICIENT_OBSERVATION';
+    | "MATCHED"
+    | "CLOSE_ENOUGH"
+    | "BELOW_THRESHOLD"
+    | "ACTION_NOT_OBSERVED"
+    | "CONFIRMATION_RETRY"
+    | "LOW_VISIBILITY"
+    | "INSUFFICIENT_OBSERVATION";
   shouldAdvance: boolean;
   shouldPause: boolean;
   speech: string;
   confidence: number;
   bestTemplateId?: string;
   weakestPart?:
-    | 'pose'
-    | 'left_hand'
-    | 'right_hand'
-    | 'trajectory'
-    | 'keyframe_trajectory';
+    "pose" | "left_hand" | "right_hand" | "trajectory" | "keyframe_trajectory";
   scores: {
     overall: number;
     pose?: number;
@@ -62,10 +61,11 @@ export interface RealtimeJudgeFeedback {
     rightHand?: number;
     trajectory?: number;
     keyframeTrajectory?: number;
+    actionCoverage?: number;
     visibility: number;
   };
   metadata: {
-    engine: 'local-skeleton-template';
+    engine: "local-skeleton-template";
     engineVersion: string;
     referenceCount: number;
     latencyMs: number;
@@ -77,19 +77,19 @@ export interface TeachingAgentSession {
   sessionId: string;
   danceId: string;
   phase:
-    | 'PREVIEW'
-    | 'MOTION_DEMO'
-    | 'PRACTICE'
-    | 'FULL_CHALLENGE'
-    | 'PAUSED'
-    | 'COMPLETED';
+    | "PREVIEW"
+    | "MOTION_DEMO"
+    | "PRACTICE"
+    | "FULL_CHALLENGE"
+    | "PAUSED"
+    | "COMPLETED";
   currentMotionIndex: number;
   currentMotionId: string;
   attemptIndex: number;
   version: number;
   completedMotions: Array<{
     motionId: string;
-    outcome: 'PASSED' | 'PASSED_WITH_HINT' | 'ASSISTED' | 'SKIPPED';
+    outcome: "PASSED" | "PASSED_WITH_HINT" | "ASSISTED" | "SKIPPED";
     attempts: number;
     finalScore?: number;
   }>;
@@ -97,7 +97,7 @@ export interface TeachingAgentSession {
 }
 
 export interface TeachingAgentTurnResult {
-  schemaVersion: 'teaching-agent-turn-v1';
+  schemaVersion: "teaching-agent-turn-v1";
   session: TeachingAgentSession;
   commands: TeachingAgentCommand[];
   idempotentReplay: boolean;
@@ -115,30 +115,30 @@ export interface PracticeObservation {
 }
 
 export type TeachingAgentEventInput =
-  | { type: 'PREVIEW_FINISHED' }
-  | { type: 'MOTION_DEMO_FINISHED' }
+  | { type: "PREVIEW_FINISHED" }
+  | { type: "MOTION_DEMO_FINISHED" }
   | {
-      type: 'REALTIME_OBSERVATION';
+      type: "REALTIME_OBSERVATION";
       sampleId: string;
       observation: PracticeObservation;
     }
-  | { type: 'VOICE_COMMAND'; command: TeachingVoiceCommand }
-  | { type: 'FULL_CHALLENGE_FINISHED' };
+  | { type: "VOICE_COMMAND"; command: TeachingVoiceCommand }
+  | { type: "FULL_CHALLENGE_FINISHED" };
 
 export interface TeachingRuntimeStatus {
   state:
-    | 'idle'
-    | 'preparing-dataset'
-    | 'ready'
-    | 'preview'
-    | 'demo'
-    | 'practice'
-    | 'challenge'
-    | 'slow-practice'
-    | 'slow-review'
-    | 'fast-challenge'
-    | 'paused'
-    | 'completed'
-    | 'error';
+    | "idle"
+    | "preparing-dataset"
+    | "ready"
+    | "preview"
+    | "demo"
+    | "practice"
+    | "challenge"
+    | "slow-practice"
+    | "slow-review"
+    | "fast-challenge"
+    | "paused"
+    | "completed"
+    | "error";
   message: string;
 }

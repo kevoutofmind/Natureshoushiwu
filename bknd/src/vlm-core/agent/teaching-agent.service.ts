@@ -30,6 +30,8 @@ const MAX_COMMANDS_PER_TURN = 8;
 
 @Injectable()
 export class TeachingAgentService {
+  private readonly confirmationRetryTargets = new Map<string, Set<string>>();
+
   constructor(
     private readonly vlmCoreService: VlmCoreService,
     private readonly lessonRegistry: LessonPlanRegistry,
@@ -66,6 +68,10 @@ export class TeachingAgentService {
       updatedAt: now,
     };
     this.sessionStore.create(session);
+    this.confirmationRetryTargets.set(
+      session.sessionId,
+      this.selectConfirmationRetryMotions(session.sessionId, plan),
+    );
 
     const commands = [
       this.tools.command(session.sessionId, 'SPEAK', {
@@ -227,7 +233,7 @@ export class TeachingAgentService {
     sampleId: string,
     observation: Parameters<VlmCoreService['judgeRealtime']>[0]['observation'],
   ): TeachingAgentCommand[] {
-    const result = this.vlmCoreService.judgeRealtime({
+    const judgedResult = this.vlmCoreService.judgeRealtime({
       schemaVersion: 'realtime-judge-v1',
       sessionId: session.sessionId,
       sampleId,
@@ -236,6 +242,14 @@ export class TeachingAgentService {
       attemptIndex: session.attemptIndex,
       observation,
     });
+    if (
+      (judgedResult.decision === 'ACCEPT' ||
+        judgedResult.decision === 'ACCEPT_HINT') &&
+      this.consumeConfirmationRetry(session)
+    ) {
+      return this.repeatCorrectMotion(session, plan, judgedResult);
+    }
+    const result = judgedResult;
     session.latestJudgeResult = result;
 
     switch (result.decision) {
@@ -274,6 +288,80 @@ export class TeachingAgentService {
         ? `很好，就是这个感觉。${result.speech}`
         : `已经很接近了，而且整体方向是对的。${result.speech}`;
     return this.advanceToNextStep(session, plan, feedback);
+  }
+
+  private repeatCorrectMotion(
+    session: TeachingAgentSession,
+    plan: TeachingLessonPlan,
+    result: RealtimeJudgeResult,
+  ): TeachingAgentCommand[] {
+    const confirmationResult: RealtimeJudgeResult = {
+      ...result,
+      decision: 'RETRY',
+      reason: 'CONFIRMATION_RETRY',
+      speech: '这个动作已经做出来了，再完整跳一遍巩固一下。',
+      shouldAdvance: false,
+      shouldPause: true,
+      confidence: result.scores.overall,
+    };
+    session.latestJudgeResult = confirmationResult;
+    session.attemptIndex += 1;
+    session.phase = 'MOTION_DEMO';
+    const motion = this.currentMotion(session, plan);
+    return [
+      this.tools.command(session.sessionId, 'STOP_REALTIME_EVALUATION', {
+        motionId: session.currentMotionId,
+      }),
+      this.tools.command(session.sessionId, 'SPEAK', {
+        speech: confirmationResult.speech,
+      }),
+      this.motionDemoCommand(session, plan, motion, 0.7),
+    ];
+  }
+
+  private consumeConfirmationRetry(session: TeachingAgentSession): boolean {
+    if (session.attemptIndex !== 1) return false;
+    const targets = this.confirmationRetryTargets.get(session.sessionId);
+    if (!targets?.has(session.currentMotionId)) return false;
+    targets.delete(session.currentMotionId);
+    return true;
+  }
+
+  private selectConfirmationRetryMotions(
+    sessionId: string,
+    plan: TeachingLessonPlan,
+  ): Set<string> {
+    if (
+      plan.policy?.confirmationRetryEnabled === false ||
+      plan.motions.length === 0
+    ) {
+      return new Set();
+    }
+
+    const ranked = plan.motions
+      .map((motion) => ({
+        motionId: motion.motionId,
+        chance: this.stableChance(`${sessionId}:${motion.motionId}`),
+      }))
+      .sort((left, right) => left.chance - right.chance);
+    const minimumCount = Math.min(1, ranked.length);
+    const maximumCount = ranked.length === 4 ? 3 : Math.min(3, ranked.length);
+    let selected = ranked.filter((candidate) => candidate.chance < 0.5);
+    if (selected.length < minimumCount) {
+      selected = ranked.slice(0, minimumCount);
+    } else if (selected.length > maximumCount) {
+      selected = selected.slice(0, maximumCount);
+    }
+    return new Set(selected.map((candidate) => candidate.motionId));
+  }
+
+  private stableChance(value: string): number {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) / 4294967296;
   }
 
   private retryOrAssist(

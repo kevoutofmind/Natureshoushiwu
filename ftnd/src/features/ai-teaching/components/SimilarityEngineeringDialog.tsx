@@ -37,6 +37,7 @@ const decisionColors: Record<
 
 const scoreDefinitions = [
   ["overall", "总相似度"],
+  ["actionCoverage", "关键动作覆盖率"],
   ["pose", "身体姿态"],
   ["leftHand", "左手动作"],
   ["rightHand", "右手动作"],
@@ -59,7 +60,7 @@ export function SimilarityEngineeringDialog({
     <Paper
       role="status"
       aria-live="polite"
-      aria-label="实时骨架轨迹相似度"
+      aria-label="当前动作整体相似度"
       elevation={12}
       sx={{
         position: "fixed",
@@ -78,14 +79,14 @@ export function SimilarityEngineeringDialog({
       }}
     >
       <Typography variant="h6" fontWeight={900}>
-        实时骨架轨迹相似度
+        当前动作整体相似度
       </Typography>
 
       {!judge ? (
         <Box sx={{ py: 3, textAlign: "center" }}>
-          <Typography fontWeight={800}>等待实时检测数据</Typography>
+          <Typography fontWeight={800}>等待完整动作数据</Typography>
           <Typography sx={{ mt: 1, color: "rgba(255,255,255,0.7)" }}>
-            打开摄像头并开始录制后，相似度约每 450ms 刷新一次。
+            完整做完当前动作后，系统统一计算一次整体相似度。
           </Typography>
         </Box>
       ) : (

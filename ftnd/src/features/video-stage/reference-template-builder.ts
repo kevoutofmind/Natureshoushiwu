@@ -13,6 +13,7 @@ import type {
   ReferenceVideoManifest,
 } from "./reference-dataset.types";
 import type { SkeletonSnapshot, VisionLandmark } from "./vision-types";
+import { danceAssetId } from "@/features/ai-teaching/dance-assets";
 
 const WASM_ROOT = "/mediapipe/wasm";
 const MODEL_URL = "/mediapipe/models/holistic_landmarker.task";
@@ -21,8 +22,12 @@ const UPPER_BODY_LANDMARKS = [11, 12, 13, 14, 15, 16, 23, 24] as const;
 export async function loadReferenceManifest(
   danceId: string,
 ): Promise<ReferenceVideoManifest> {
+  const assetDanceId = danceAssetId(danceId);
+  if (!assetDanceId) {
+    throw new Error(`不支持的舞蹈 ID：${danceId}`);
+  }
   const response = await fetch(
-    `/dances/${encodeURIComponent(danceId)}/manifest.json`,
+    `/dances/${encodeURIComponent(assetDanceId)}/manifest.json`,
     {
       cache: "no-store",
     },
@@ -30,7 +35,8 @@ export async function loadReferenceManifest(
   if (!response.ok) {
     throw new Error(`没有找到舞蹈 ${danceId} 的参考视频清单。`);
   }
-  return (await response.json()) as ReferenceVideoManifest;
+  const manifest = (await response.json()) as ReferenceVideoManifest;
+  return manifest.danceId === danceId ? manifest : { ...manifest, danceId };
 }
 
 export async function buildReferenceDataset(
@@ -255,6 +261,7 @@ function assembleDataset(
         maxRetriesPerMotion: 2,
         allowVoiceSkip: true,
         autoAdvanceAfterMaxRetries: true,
+        confirmationRetryEnabled: true,
       },
       motions: templatePacks.map((pack, index) => ({
         motionId: pack.motionId,

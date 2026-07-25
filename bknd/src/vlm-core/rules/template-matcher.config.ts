@@ -1,4 +1,4 @@
-export const TEMPLATE_MATCHER_VERSION = 'template-matcher-v1.0.0';
+export const TEMPLATE_MATCHER_VERSION = 'template-matcher-v2.0.0';
 
 export const TEMPLATE_MATCHER_CONFIG = {
   acceptThreshold: 0.78,
@@ -11,11 +11,30 @@ export const TEMPLATE_MATCHER_CONFIG = {
   minimumHandVisibility: 0.45,
   landmarkVisibilityThreshold: 0.35,
   poseDistanceScale: 0.55,
+  bodyLayoutDistanceScale: 0.55,
+  poseLandmarkDetailWeight: 0.2,
+  poseBodyLayoutWeight: 0.8,
   handDistanceScale: 0.48,
   trajectoryDistanceScale: 0.8,
   keyframeTrajectoryWeight: 0.35,
+  scoreWeights: {
+    pose: 0.55,
+    leftHand: 0.075,
+    rightHand: 0.075,
+    trajectory: 0.3,
+  },
+  keyframeScoreWeights: {
+    pose: 0.55,
+    leftHand: 0.075,
+    rightHand: 0.075,
+    trajectory: 0.3,
+  },
   keyframeWindowProgress: 0.045,
   keyframeSearchRadius: 0.18,
   keyframeSearchStepProgress: 0.015,
   keyframeComparisonFrameCount: 9,
+  actionEventWindowMs: 500,
+  actionPoseSimilarityThreshold: 0.45,
+  actionMovementFloor: 0.12,
+  actionMovementRatio: 0.25,
 } as const;

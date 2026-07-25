@@ -22,7 +22,10 @@ import { TeachingAgentTools } from './teaching-agent.tools';
 import { TeachingAgentValidator } from './teaching-agent.validator';
 
 describe('TeachingAgentService', () => {
-  function setup(motionIds: string[] = ['motion-001', 'motion-002']) {
+  function setup(
+    motionIds: string[] = ['motion-001', 'motion-002'],
+    confirmationRetryEnabled = false,
+  ) {
     const templateRegistry = new MotionTemplateRegistry();
     const realtimeValidator = new RealtimeJudgeValidator();
     const vlmCore = new VlmCoreService(
@@ -53,7 +56,12 @@ describe('TeachingAgentService', () => {
       templateRegistry,
       promptCatalog,
     );
-    agent.registerLesson(createLessonPlanFixture(motionIds));
+    const lesson = createLessonPlanFixture(motionIds);
+    lesson.policy = {
+      ...lesson.policy,
+      confirmationRetryEnabled,
+    };
+    agent.registerLesson(lesson);
     return { agent };
   }
 
@@ -160,6 +168,82 @@ describe('TeachingAgentService', () => {
     expect(replay.session.version).toBe(1);
     expect(replay.idempotentReplay).toBe(true);
     expect(replay.commands).toEqual(first.commands);
+  });
+
+  it('forces exactly one to three first-pass confirmation retries across four motions', () => {
+    const motionIds = ['motion-001', 'motion-002', 'motion-003', 'motion-004'];
+    const { agent } = setup(motionIds, true);
+    const sessionId = 'agent-session-confirmation-retries';
+    let turn = agent.startSession({
+      schemaVersion: 'teaching-agent-start-v1',
+      sessionId,
+      danceId: 'dance-001',
+    });
+    let sequence = 0;
+    turn = agent.handleEvent(
+      simpleAgentEvent(
+        sessionId,
+        `event-${++sequence}`,
+        'PREVIEW_FINISHED',
+        turn.session.version,
+      ),
+    );
+    let confirmationRetryCount = 0;
+
+    for (const motionId of motionIds) {
+      turn = agent.handleEvent(
+        simpleAgentEvent(
+          sessionId,
+          `event-${++sequence}`,
+          'MOTION_DEMO_FINISHED',
+          turn.session.version,
+        ),
+      );
+      const firstAttempt = agent.handleEvent(
+        realtimeAgentEvent(
+          sessionId,
+          `event-${++sequence}`,
+          `sample-${motionId}-first`,
+          createRealtimeJudgeFixture('correct').observation,
+          turn.session.version,
+        ),
+      );
+      turn = firstAttempt;
+
+      if (
+        firstAttempt.session.phase === 'MOTION_DEMO' &&
+        firstAttempt.session.currentMotionId === motionId
+      ) {
+        confirmationRetryCount += 1;
+        expect(firstAttempt.session.latestJudgeResult?.reason).toBe(
+          'CONFIRMATION_RETRY',
+        );
+        turn = agent.handleEvent(
+          simpleAgentEvent(
+            sessionId,
+            `event-${++sequence}`,
+            'MOTION_DEMO_FINISHED',
+            turn.session.version,
+          ),
+        );
+        turn = agent.handleEvent(
+          realtimeAgentEvent(
+            sessionId,
+            `event-${++sequence}`,
+            `sample-${motionId}-second`,
+            createRealtimeJudgeFixture('correct').observation,
+            turn.session.version,
+          ),
+        );
+        expect(turn.session.latestJudgeResult?.reason).not.toBe(
+          'CONFIRMATION_RETRY',
+        );
+      }
+    }
+
+    expect(confirmationRetryCount).toBeGreaterThanOrEqual(1);
+    expect(confirmationRetryCount).toBeLessThanOrEqual(3);
+    expect(turn.session.phase).toBe('FULL_CHALLENGE');
   });
 
   it('uses local retry policy and requests non-blocking cloud coaching', () => {
