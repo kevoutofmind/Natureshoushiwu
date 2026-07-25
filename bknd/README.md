@@ -36,15 +36,17 @@ $ npm install
 Copy `.env.example` to `.env` and fill in local secrets such as `KIMI_API_KEY`.
 Do not commit the real `.env` file.
 
-For Lumi's local ChatTTS voice service, create a Python environment and install:
+For Lumi's local CosyVoice service, run the setup script once:
 
-```bash
-$ python -m pip install -r requirements-chattts.txt
-$ python scripts/chattts-openai-server.py
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-cosyvoice.ps1
+& ".\.cache\cosyvoice\env\python.exe" ".\scripts\cosyvoice-openai-server.py"
 ```
 
-The backend proxies speech requests to `CHAT_TTS_BASE_URL`, which defaults to
-`http://127.0.0.1:9966/v1`.
+This installs CosyVoice in an ignored local cache and downloads the
+`CosyVoice-300M-SFT` model. The backend proxies speech requests to
+`COSYVOICE_BASE_URL`, which defaults to `http://127.0.0.1:9967`.
+See `LUMI_COSYVOICE_README.md` for the full teammate setup checklist.
 
 ## Compile and run the project
 

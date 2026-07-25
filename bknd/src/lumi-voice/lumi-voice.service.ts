@@ -5,7 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 
-interface ChatTtsSpeechRequest {
+interface TtsSpeechRequest {
   model: string;
   input: string;
   voice: string;
@@ -20,14 +20,25 @@ interface LumiSpeechAudio {
 
 @Injectable()
 export class LumiVoiceService {
-  private readonly chatTtsBaseUrl =
-    process.env.CHAT_TTS_BASE_URL ??
+  private readonly ttsBaseUrl =
+    process.env.COSYVOICE_BASE_URL ??
     process.env.LUMI_TTS_BASE_URL ??
-    'http://127.0.0.1:9966';
+    process.env.CHAT_TTS_BASE_URL ??
+    'http://127.0.0.1:9967';
 
-  private readonly model = process.env.CHAT_TTS_MODEL ?? 'chattts';
-  private readonly voice = process.env.CHAT_TTS_VOICE ?? 'lumi';
-  private readonly timeoutMs = Number(process.env.CHAT_TTS_TIMEOUT_MS ?? 60000);
+  private readonly model =
+    process.env.COSYVOICE_MODEL ??
+    process.env.CHAT_TTS_MODEL ??
+    'CosyVoice-300M-SFT';
+  private readonly voice =
+    process.env.COSYVOICE_VOICE ?? process.env.CHAT_TTS_VOICE ?? '中文女';
+  private readonly timeoutMs = Number(
+    process.env.COSYVOICE_TIMEOUT_MS ??
+      process.env.CHAT_TTS_TIMEOUT_MS ??
+      120000,
+  );
+  private readonly provider =
+    process.env.LUMI_TTS_PROVIDER?.trim().toLowerCase() || 'cosyvoice';
 
   async synthesize(text: string, voice?: string): Promise<LumiSpeechAudio> {
     const normalizedText = typeof text === 'string' ? text.trim() : '';
@@ -39,7 +50,7 @@ export class LumiVoiceService {
       });
     }
 
-    if (process.env.LUMI_TTS_PROVIDER === 'browser') {
+    if (this.provider === 'browser') {
       throw new ServiceUnavailableException({
         success: false,
         code: 'LUMI_TTS_DISABLED',
@@ -47,11 +58,11 @@ export class LumiVoiceService {
       });
     }
 
-    const requestBody: ChatTtsSpeechRequest = {
+    const requestBody: TtsSpeechRequest = {
       model: this.model,
       input: normalizedText,
       voice: voice?.trim() || this.voice,
-      response_format: 'mp3',
+      response_format: 'wav',
       speed: 0.95,
     };
     const controller = new AbortController();
@@ -59,7 +70,7 @@ export class LumiVoiceService {
 
     try {
       const response = await fetch(
-        `${this.chatTtsBaseUrl.replace(/\/$/, '')}/v1/audio/speech`,
+        `${this.ttsBaseUrl.replace(/\/$/, '')}/v1/audio/speech`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -71,8 +82,8 @@ export class LumiVoiceService {
       if (!response.ok) {
         throw new BadGatewayException({
           success: false,
-          code: 'CHAT_TTS_REQUEST_FAILED',
-          message: `ChatTTS returned HTTP ${response.status}.`,
+          code: 'LUMI_TTS_REQUEST_FAILED',
+          message: `${this.provider} returned HTTP ${response.status}.`,
         });
       }
 
@@ -81,8 +92,8 @@ export class LumiVoiceService {
       if (!contentType.toLowerCase().startsWith('audio/')) {
         throw new BadGatewayException({
           success: false,
-          code: 'CHAT_TTS_INVALID_RESPONSE',
-          message: 'ChatTTS did not return audio.',
+          code: 'LUMI_TTS_INVALID_RESPONSE',
+          message: `${this.provider} did not return audio.`,
         });
       }
 
@@ -94,11 +105,11 @@ export class LumiVoiceService {
       if (error instanceof BadGatewayException) throw error;
       throw new ServiceUnavailableException({
         success: false,
-        code: 'CHAT_TTS_UNAVAILABLE',
+        code: 'LUMI_TTS_UNAVAILABLE',
         message:
           error instanceof Error
             ? error.message
-            : 'ChatTTS service is unavailable.',
+            : `${this.provider} service is unavailable.`,
       });
     } finally {
       clearTimeout(timeout);

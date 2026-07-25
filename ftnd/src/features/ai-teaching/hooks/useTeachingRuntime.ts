@@ -889,7 +889,7 @@ function stringArgument(value: unknown): string {
 
 const LUMI_MAX_CHUNK_LENGTH = 28;
 const LUMI_MAX_QUEUED_CHUNKS = 8;
-const LUMI_TTS_FALLBACK_DELAY_MS = 2500;
+const LUMI_TTS_FALLBACK_DELAY_MS = 12000;
 
 function normalizeLumiSpeech(speech: string): string {
   return speech
