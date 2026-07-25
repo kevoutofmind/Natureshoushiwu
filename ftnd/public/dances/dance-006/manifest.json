@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "reference-video-manifest-v1",
+  "danceId": "dance-006",
+  "title": "no",
+  "primaryReferenceId": "dance-006-reference",
+  "references": [
+    {
+      "referenceId": "dance-006-reference",
+      "videoUrl": "/dances/dance-006/reference.mp4",
+      "mirrored": false
+    }
+  ],
+  "extraction": {
+    "sampleFps": 10,
+    "targetMotionDurationMs": 3967,
+    "minimumMotionDurationMs": 2600,
+    "maximumMotionDurationMs": 5200
+  }
+}

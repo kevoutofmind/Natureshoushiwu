@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "reference-video-manifest-v1",
+  "danceId": "dance-003",
+  "title": "fade",
+  "primaryReferenceId": "dance-003-reference",
+  "references": [
+    {
+      "referenceId": "dance-003-reference",
+      "videoUrl": "/dances/dance-003/reference.mp4",
+      "mirrored": false
+    }
+  ],
+  "extraction": {
+    "sampleFps": 10,
+    "targetMotionDurationMs": 2683,
+    "minimumMotionDurationMs": 1800,
+    "maximumMotionDurationMs": 3500
+  }
+}

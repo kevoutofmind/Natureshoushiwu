@@ -16,6 +16,8 @@ import { interpretVoiceCommand } from "../api";
 import { useBrowserSpeechRecognition } from "../hooks/useBrowserSpeechRecognition";
 import type { VoiceCommandResult } from "../types";
 
+import { matchActionNavigationVoiceIntent } from '../immediateVoiceCommands';
+
 interface VoiceControlPanelProps {
   onCommandRecognized?: (result: VoiceCommandResult) => void;
 }
@@ -34,6 +36,27 @@ export default function VoiceControlPanel({
       if (!trimmedTranscript) return;
 
       setLastTranscript(trimmedTranscript);
+      const localActionIntent =
+        matchActionNavigationVoiceIntent(trimmedTranscript);
+      if (localActionIntent) {
+        const localResult: VoiceCommandResult = {
+          accepted: true,
+          command: {
+            transcript: trimmedTranscript,
+            normalizedTranscript: trimmedTranscript,
+            intent: localActionIntent,
+            confidence: 1,
+            parameters: {},
+          },
+          label: '动作导航',
+          responseText: actionNavigationResponse(localActionIntent),
+          executionStatus: 'not-dispatched',
+        };
+        setRequestError('');
+        setLastResult(localResult);
+        onCommandRecognized?.(localResult);
+        return;
+      }
       setProcessing(true);
       setRequestError("");
 
@@ -175,4 +198,19 @@ export default function VoiceControlPanel({
       </Snackbar>
     </>
   );
+}
+
+function actionNavigationResponse(intent: VoiceCommandResult['command']['intent']) {
+  switch (intent) {
+    case 'PREVIOUS_ACTION':
+      return '好的，播放上一个动作。';
+    case 'REPEAT_ACTION':
+      return '没关系，我们把当前动作再看一遍。';
+    case 'NEXT_ACTION':
+      return '好的，播放下一个动作。';
+    case 'RESTART_LESSON':
+      return '好的，从第一个动作重新开始。';
+    default:
+      return '好的，继续练习。';
+  }
 }

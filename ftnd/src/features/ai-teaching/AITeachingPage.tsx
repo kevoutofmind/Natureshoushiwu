@@ -52,6 +52,8 @@ import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
 
+import { teachingMotionClipUrls } from './motion-video-catalog';
+
 const FULL_FRAME_STREAK = 3;
 
 function landmarkConfidence(
@@ -168,6 +170,9 @@ export default function AITeachingPage({
     runtimeStatus,
     buildProgress,
     referenceVideoUrl,
+    activePlaybackVideoUrl,
+    activeMotionClipIndex,
+    playTeachingMotionClip,
     session: teachingSession,
     latestSpeech,
     lessonMotions,
@@ -214,8 +219,11 @@ export default function AITeachingPage({
     };
   }, [activeDanceId]);
 
-  const effectiveReferenceUrl =
+  const overviewReferenceUrl =
     referenceUrl || referenceVideoUrl || selectedReferenceUrl;
+  const motionClipUrls = teachingMotionClipUrls(activeDanceId);
+  const effectiveReferenceUrl =
+    referenceUrl || activePlaybackVideoUrl || overviewReferenceUrl;
   const currentInstruction = teachingSession
     ? lessonMotions[teachingSession.currentMotionIndex]?.instruction
     : undefined;
@@ -573,8 +581,14 @@ export default function AITeachingPage({
         <aside className="motion-thumbnail-rail" aria-label="四个关键动作">
           <MotionPreviewSequence
             mode="compact"
-            videoUrl={effectiveReferenceUrl}
+            videoUrl={overviewReferenceUrl}
             motions={motionBreakdown?.motions}
+            motionVideoUrls={motionClipUrls}
+            activeMotionIndex={activeMotionClipIndex}
+            onSelectMotion={(motionIndex) => {
+              setError('');
+              void playTeachingMotionClip(motionIndex);
+            }}
           />
         </aside>
 
@@ -819,8 +833,9 @@ export default function AITeachingPage({
         {lumiStage === "preview" && (
           <MotionPreviewSequence
             mode="overlay"
-            videoUrl={effectiveReferenceUrl}
+            videoUrl={overviewReferenceUrl}
             motions={motionBreakdown?.motions}
+            motionVideoUrls={motionClipUrls}
             onContinue={enterTeachingFromPreview}
           />
         )}

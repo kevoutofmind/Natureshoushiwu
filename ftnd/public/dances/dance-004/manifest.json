@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "reference-video-manifest-v1",
+  "danceId": "dance-004",
+  "title": "fight",
+  "primaryReferenceId": "dance-004-reference",
+  "references": [
+    {
+      "referenceId": "dance-004-reference",
+      "videoUrl": "/dances/dance-004/reference.mp4",
+      "mirrored": false
+    }
+  ],
+  "extraction": {
+    "sampleFps": 10,
+    "targetMotionDurationMs": 2750,
+    "minimumMotionDurationMs": 1800,
+    "maximumMotionDurationMs": 3600
+  }
+}

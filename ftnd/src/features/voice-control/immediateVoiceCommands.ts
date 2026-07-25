@@ -1,5 +1,33 @@
 ﻿export const IMMEDIATE_COMMAND_RESET_DELAY_MS = 1000;
 
+export const ACTION_NAVIGATION_VOICE_COMMANDS = {
+  PREVIOUS_ACTION: ['上个动作', '上一个动作', '前一个动作', '回到上个动作', '返回上个动作', '倒退到上个', '退回上个'],
+  REPEAT_ACTION: ['这个动作再来一遍', '当前动作再来一遍', '再做一遍', '再来一遍', '重新做一遍', '重复这个动作', '再教我一次', '再示范一次', '没看清', '没学会', '我不会', '我还不会', '还是不会', '不会做', '我不会做', '教教我', '怎么做'],
+  NEXT_ACTION: ['下个动作', '下一个动作', '跳到下个', '进入下个', '继续往下学', '这个会了', '这个学会了', '不用练这个'],
+  RESTART_LESSON: ['从头开始教学', '重新开始教学', '整支重来', '从第一个动作开始'],
+} as const;
+
+const actionNavigationCommandValues = Object.values(
+  ACTION_NAVIGATION_VOICE_COMMANDS,
+).flat();
+
+export type ActionNavigationVoiceIntent =
+  keyof typeof ACTION_NAVIGATION_VOICE_COMMANDS;
+
+export function matchActionNavigationVoiceIntent(
+  transcript: string,
+): ActionNavigationVoiceIntent | null {
+  const normalized = normalizeVoiceTranscript(transcript);
+  for (const [intent, phrases] of Object.entries(
+    ACTION_NAVIGATION_VOICE_COMMANDS,
+  ) as Array<
+    [ActionNavigationVoiceIntent, readonly string[]]
+  >) {
+    if (phrases.some((phrase) => normalized.includes(phrase))) return intent;
+  }
+  return null;
+}
+
 export function canDispatchAfterCooldown(
   now: number,
   blockedUntil: number,
@@ -71,7 +99,11 @@ export function extractImmediateVoiceCommand(
   const normalized = normalizeVoiceTranscript(transcript);
   let latest: CommandCandidate | null = null;
 
-  for (const command of [...fixedCommandValues, ...additionalImmediateCommandValues]) {
+  for (const command of [
+    ...fixedCommandValues,
+    ...additionalImmediateCommandValues,
+    ...actionNavigationCommandValues,
+  ]) {
     const index = normalized.lastIndexOf(command);
     if (index >= 0) latest = laterCommand(latest, { command, index });
   }
