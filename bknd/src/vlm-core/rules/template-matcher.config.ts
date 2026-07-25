@@ -13,4 +13,9 @@ export const TEMPLATE_MATCHER_CONFIG = {
   poseDistanceScale: 0.55,
   handDistanceScale: 0.48,
   trajectoryDistanceScale: 0.8,
+  keyframeTrajectoryWeight: 0.35,
+  keyframeWindowProgress: 0.045,
+  keyframeSearchRadius: 0.18,
+  keyframeSearchStepProgress: 0.015,
+  keyframeComparisonFrameCount: 9,
 } as const;

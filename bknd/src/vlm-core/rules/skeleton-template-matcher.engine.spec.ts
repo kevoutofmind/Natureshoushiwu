@@ -66,4 +66,45 @@ describe('SkeletonTemplateMatcherEngine', () => {
     expect(result.shouldAdvance).toBe(false);
     expect(result.shouldPause).toBe(true);
   });
+
+  it('scores annotated keyframe trajectories and separates an incorrect path', () => {
+    const keyframePack = {
+      ...pack,
+      keyframes: [
+        {
+          keyframeId: 'open-start',
+          label: '双手开始展开',
+          progress: 0.3,
+          windowProgress: 0.15,
+          requiredParts: ['pose', 'left_hand', 'right_hand'] as const,
+        },
+        {
+          keyframeId: 'open-finish',
+          label: '双手展开结束',
+          progress: 0.7,
+          windowProgress: 0.15,
+          requiredParts: ['pose', 'left_hand', 'right_hand'] as const,
+        },
+      ],
+      evaluationPolicy: {
+        ...pack.evaluationPolicy,
+        keyframeTrajectoryWeight: 0.5,
+      },
+    };
+
+    const correct = engine.evaluate(
+      keyframePack,
+      createRealtimeJudgeFixture('correct'),
+    );
+    const incorrect = engine.evaluate(
+      keyframePack,
+      createRealtimeJudgeFixture('incorrect'),
+    );
+
+    expect(correct.scores.keyframeTrajectory).toBeDefined();
+    expect(incorrect.scores.keyframeTrajectory).toBeDefined();
+    expect(correct.scores.keyframeTrajectory).toBeGreaterThan(
+      incorrect.scores.keyframeTrajectory ?? 1,
+    );
+  });
 });

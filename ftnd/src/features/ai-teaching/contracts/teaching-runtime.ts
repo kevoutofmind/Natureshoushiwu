@@ -1,4 +1,7 @@
-import type { SkeletonSnapshot } from '@/features/video-stage/vision-types';
+import type {
+  SkeletonSnapshot,
+  VisionLandmark,
+} from '@/features/video-stage/vision-types';
 
 export type TeachingVoiceCommand =
   | 'PAUSE'
@@ -32,12 +35,42 @@ export interface TeachingAgentCommand {
 }
 
 export interface RealtimeJudgeFeedback {
+  sampleId: string;
+  motionId: string;
   decision: 'ACCEPT' | 'ACCEPT_HINT' | 'RETRY' | 'KEEP_WATCHING' | 'NOT_VISIBLE';
+  reason:
+    | 'MATCHED'
+    | 'CLOSE_ENOUGH'
+    | 'BELOW_THRESHOLD'
+    | 'LOW_VISIBILITY'
+    | 'INSUFFICIENT_OBSERVATION';
   shouldAdvance: boolean;
   shouldPause: boolean;
   speech: string;
   confidence: number;
-  scores: { overall: number; visibility: number };
+  bestTemplateId?: string;
+  weakestPart?:
+    | 'pose'
+    | 'left_hand'
+    | 'right_hand'
+    | 'trajectory'
+    | 'keyframe_trajectory';
+  scores: {
+    overall: number;
+    pose?: number;
+    leftHand?: number;
+    rightHand?: number;
+    trajectory?: number;
+    keyframeTrajectory?: number;
+    visibility: number;
+  };
+  metadata: {
+    engine: 'local-skeleton-template';
+    engineVersion: string;
+    referenceCount: number;
+    latencyMs: number;
+    cloudCalled: false;
+  };
 }
 
 export interface TeachingAgentSession {
@@ -73,7 +106,12 @@ export interface TeachingAgentTurnResult {
 export interface PracticeObservation {
   mirrored: boolean;
   progress: number;
-  frames: SkeletonSnapshot[];
+  frames: Array<{
+    timestampMs: number;
+    pose: VisionLandmark[];
+    leftHand?: VisionLandmark[];
+    rightHand?: VisionLandmark[];
+  }>;
 }
 
 export type TeachingAgentEventInput =

@@ -26,6 +26,73 @@ export class RealtimeJudgeValidator {
       this.fail('templates', '至少需要一条正确参考骨骼模板');
     }
 
+    if (pack.keyframes !== undefined) {
+      if (!Array.isArray(pack.keyframes) || pack.keyframes.length === 0) {
+        this.fail('keyframes', '关键帧标注必须是非空数组');
+      }
+      const keyframeIds = new Set<string>();
+      let previousProgress = -1;
+      pack.keyframes.forEach((keyframe, index) => {
+        this.nonEmpty(keyframe.keyframeId, `keyframes.${index}.keyframeId`);
+        this.nonEmpty(keyframe.label, `keyframes.${index}.label`);
+        if (keyframeIds.has(keyframe.keyframeId)) {
+          this.fail(
+            `keyframes.${index}.keyframeId`,
+            '同一动作中的关键帧ID不能重复',
+          );
+        }
+        keyframeIds.add(keyframe.keyframeId);
+        this.unitInterval(keyframe.progress, `keyframes.${index}.progress`);
+        if (keyframe.progress <= previousProgress) {
+          this.fail(`keyframes.${index}.progress`, '关键帧进度必须严格递增');
+        }
+        previousProgress = keyframe.progress;
+        if (keyframe.windowProgress !== undefined) {
+          this.unitInterval(
+            keyframe.windowProgress,
+            `keyframes.${index}.windowProgress`,
+          );
+          if (keyframe.windowProgress === 0) {
+            this.fail(
+              `keyframes.${index}.windowProgress`,
+              '关键帧轨迹窗口必须大于0',
+            );
+          }
+        }
+        if (keyframe.weight !== undefined) {
+          if (!Number.isFinite(keyframe.weight) || keyframe.weight <= 0) {
+            this.fail(
+              `keyframes.${index}.weight`,
+              '关键帧相对权重必须是大于0的有限数值',
+            );
+          }
+        }
+        if (keyframe.templateProgress !== undefined) {
+          if (
+            typeof keyframe.templateProgress !== 'object' ||
+            Array.isArray(keyframe.templateProgress)
+          ) {
+            this.fail(
+              `keyframes.${index}.templateProgress`,
+              '模板关键帧位置必须是对象',
+            );
+          }
+          for (const [templateId, progress] of Object.entries(
+            keyframe.templateProgress,
+          )) {
+            this.nonEmpty(
+              templateId,
+              `keyframes.${index}.templateProgress.templateId`,
+            );
+            this.unitInterval(
+              progress,
+              `keyframes.${index}.templateProgress.${templateId}`,
+            );
+          }
+        }
+      });
+    }
+
     pack.templates.forEach((template, index) => {
       this.nonEmpty(template.templateId, `templates.${index}.templateId`);
       this.nonEmpty(template.sourceVideoId, `templates.${index}.sourceVideoId`);
@@ -82,6 +149,12 @@ export class RealtimeJudgeValidator {
       this.fail(
         'evaluationPolicy.minimumObservationMs',
         '必须是不小于100 ms的有限数值',
+      );
+    }
+    if (policy?.keyframeTrajectoryWeight !== undefined) {
+      this.unitInterval(
+        policy.keyframeTrajectoryWeight,
+        'evaluationPolicy.keyframeTrajectoryWeight',
       );
     }
   }

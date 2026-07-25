@@ -6,6 +6,7 @@ import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordR
 import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
+import TroubleshootRoundedIcon from "@mui/icons-material/TroubleshootRounded";
 import {
   Alert,
   Box,
@@ -18,12 +19,6 @@ import { saveDraft } from "@/features/drafts/draft-store";
 import { SkeletonOverlay } from "@/features/video-stage/components/SkeletonOverlay";
 import { RecordingEffectsPicker } from "@/features/video-stage/components/RecordingEffectsPicker";
 import { useHolisticLandmarker } from "@/features/video-stage/hooks/useHolisticLandmarker";
-import { useRecordingEffectRenderer } from "@/features/video-stage/hooks/useRecordingEffectRenderer";
-import {
-  DEFAULT_BEAUTY_SETTINGS,
-  type BeautySettings,
-  type RecordingEffectId,
-} from "@/features/video-stage/recording-effects";
 import {
   averageVisibility,
   compareGeometry,
@@ -41,6 +36,7 @@ import { getTeachingWorkspace } from "./api";
 import FloatingAiCoach from "./components/FloatingAiCoach";
 import MotionBreakdownOverlay from "./components/MotionBreakdownOverlay";
 import MotionPreviewSequence from "./components/MotionPreviewSequence";
+import { SimilarityEngineeringDialog } from "./components/SimilarityEngineeringDialog";
 import {
   getMotionBreakdown,
   type CuratedMotionBreakdown,
@@ -99,7 +95,8 @@ export default function AITeachingPage({
   danceTitle?: string;
   onboarding?: boolean;
 }) {
-  const activeDanceId = danceId ?? "dance-001";
+  const activeDanceId = danceId ?? "cat";
+  const catalogDanceId = selectedDanceId ?? "dance-001";
   const roadshowMode = process.env.NEXT_PUBLIC_ROADSHOW_MODE === "true";
   const router = useRouter();
   const liveVideoRef = useRef<HTMLVideoElement>(null);
@@ -119,10 +116,6 @@ export default function AITeachingPage({
     error: visionError,
   } = useHolisticLandmarker();
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
-  const [recordingEffect, setRecordingEffect] =
-    useState<RecordingEffectId>("clear");
-  const [beautySettings, setBeautySettings] =
-    useState<BeautySettings>(DEFAULT_BEAUTY_SETTINGS);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
@@ -140,21 +133,10 @@ export default function AITeachingPage({
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [similarityDialogOpen, setSimilarityDialogOpen] = useState(false);
   const [lumiStage, setLumiStage] = useState<"intro" | "preview" | "teaching">(
     onboarding ? "intro" : "teaching",
   );
-  const {
-    containerRef: effectCanvasContainerRef,
-    getRecordingStream,
-    rendererState,
-  } = useRecordingEffectRenderer({
-    sourceVideoRef: liveVideoRef,
-    sourceStreamRef: streamRef,
-    effect: recordingEffect,
-    beauty: beautySettings,
-    enabled:
-      recordingState === "camera-ready" || recordingState === "recording",
-  });
   const {
     actionIndex,
     applyFeedback,
@@ -169,6 +151,7 @@ export default function AITeachingPage({
     buildProgress,
     referenceVideoUrl,
     session: teachingSession,
+    latestJudgeResult,
     latestSpeech,
     lessonMotions,
   } = useTeachingRuntime({
@@ -202,7 +185,7 @@ export default function AITeachingPage({
 
   useEffect(() => {
     let active = true;
-    getMotionBreakdown(activeDanceId)
+    getMotionBreakdown(catalogDanceId)
       .then((breakdown) => {
         if (active) setMotionBreakdown(breakdown);
       })
@@ -212,10 +195,10 @@ export default function AITeachingPage({
     return () => {
       active = false;
     };
-  }, [activeDanceId]);
+  }, [catalogDanceId]);
 
   const effectiveReferenceUrl =
-    referenceUrl || referenceVideoUrl || selectedReferenceUrl;
+    referenceUrl || selectedReferenceUrl || referenceVideoUrl;
   const currentInstruction = teachingSession
     ? lessonMotions[teachingSession.currentMotionIndex]?.instruction
     : undefined;
@@ -447,7 +430,7 @@ export default function AITeachingPage({
   };
 
   const startRecording = () => {
-    const stream = getRecordingStream();
+    const stream = streamRef.current;
     if (!stream || typeof MediaRecorder === "undefined") {
       setError("请先打开摄像头，或更换支持 MediaRecorder 的浏览器。");
       return;
@@ -493,6 +476,15 @@ export default function AITeachingPage({
     };
     recorder.start(250);
     setRecordingState("recording");
+    const referenceVideo = referenceVideoRef.current;
+    if (referenceVideo) {
+      referenceVideo.currentTime = 0;
+      referenceVideo.playbackRate = 1;
+      referenceVideo.muted = false;
+      void referenceVideo.play().catch(() => {
+        setError("左侧示例视频无法自动播放，请点击视频后重试。");
+      });
+    }
     if (
       !teachingSession &&
       runtimeStatus.state !== "preparing-dataset"
@@ -665,20 +657,15 @@ export default function AITeachingPage({
                 ) : (
                   <>
                     <video
-                      className="camera-feed-mirrored camera-source-video"
+                      className="camera-feed-mirrored"
                       ref={liveVideoRef}
                       muted
                       playsInline
                     />
-                    <Box
-                      ref={effectCanvasContainerRef}
-                      className="camera-effect-layer"
-                      aria-hidden="true"
-                    />
                     <SkeletonOverlay
                       snapshot={liveSkeleton}
                       videoRef={liveVideoRef}
-                      mirrored={false}
+                      mirrored
                     />
                     {recordingState === "idle" && (
                       <Stack className="camera-placeholder" alignItems="center">
@@ -699,17 +686,7 @@ export default function AITeachingPage({
                 )}
                 {error && <Box className="stage-error">{error}</Box>}
                 {!previewUrl && (
-                  <RecordingEffectsPicker
-                    value={recordingEffect}
-                    onChange={setRecordingEffect}
-                    beauty={beautySettings}
-                    onBeautyChange={(key, value) =>
-                      setBeautySettings((current) => ({
-                        ...current,
-                        [key]: value,
-                      }))
-                    }
-                  />
+                  <RecordingEffectsPicker />
                 )}
                 <VlmStageFeedbackOverlay
                   actionIndex={actionIndex}
@@ -741,7 +718,6 @@ export default function AITeachingPage({
                   variant="contained"
                   color="secondary"
                   onClick={startRecording}
-                  disabled={rendererState === "loading"}
                   startIcon={<FiberManualRecordRoundedIcon />}
                 >
                   开始录制并启动 AI 教学
@@ -792,6 +768,21 @@ export default function AITeachingPage({
                   导出 JSON
                 </Button>
               )}
+              <Button
+                variant="outlined"
+                color="info"
+                onClick={() =>
+                  setSimilarityDialogOpen((current) => !current)
+                }
+                startIcon={<TroubleshootRoundedIcon />}
+              >
+                {similarityDialogOpen ? "关闭工程窗口" : "工程：轨迹相似度"}
+                {latestJudgeResult
+                  ? ` ${Math.round(
+                      latestJudgeResult.scores.overall * 100,
+                    )}%`
+                  : ""}
+              </Button>
               <Box className="studio-voice-control">
                 <VoiceControlPanel
                   onCommandRecognized={handlePageVoiceResult}
@@ -824,6 +815,10 @@ export default function AITeachingPage({
             onContinue={enterTeachingFromPreview}
           />
         )}
+        <SimilarityEngineeringDialog
+          open={similarityDialogOpen}
+          judge={latestJudgeResult}
+        />
       </Box>
     </Box>
   );

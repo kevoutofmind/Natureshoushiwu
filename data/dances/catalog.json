@@ -3,6 +3,7 @@
   "categories": [
     {
       "danceId": "dance-001",
+      "runtimeDanceId": "cat",
       "title": "cat",
       "sourceFileName": "cat (1).mp4",
       "referenceVideoUrl": "/dances/dance-001/reference.mp4",
@@ -14,6 +15,7 @@
     },
     {
       "danceId": "dance-002",
+      "runtimeDanceId": "cloud",
       "title": "cloud",
       "sourceFileName": "cloud.mp4",
       "referenceVideoUrl": "/dances/dance-002/reference.mp4",
@@ -25,6 +27,7 @@
     },
     {
       "danceId": "dance-003",
+      "runtimeDanceId": "fade",
       "title": "fade",
       "sourceFileName": "fade.mp4",
       "referenceVideoUrl": "/dances/dance-003/reference.mp4",
@@ -36,6 +39,7 @@
     },
     {
       "danceId": "dance-004",
+      "runtimeDanceId": "fight",
       "title": "fight",
       "sourceFileName": "fight (1).mp4",
       "referenceVideoUrl": "/dances/dance-004/reference.mp4",
@@ -47,6 +51,7 @@
     },
     {
       "danceId": "dance-005",
+      "runtimeDanceId": "indo",
       "title": "indo",
       "sourceFileName": "indo.mp4",
       "referenceVideoUrl": "/dances/dance-005/reference.mp4",
@@ -58,6 +63,7 @@
     },
     {
       "danceId": "dance-006",
+      "runtimeDanceId": "no",
       "title": "no",
       "sourceFileName": "no.mp4",
       "referenceVideoUrl": "/dances/dance-006/reference.mp4",

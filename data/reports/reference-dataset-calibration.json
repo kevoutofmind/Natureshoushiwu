@@ -1,0 +1,587 @@
+{
+  "schemaVersion": "reference-dataset-calibration-report-v1",
+  "generatedAt": "2026-07-25T07:00:38.017Z",
+  "dataRoot": "C:\\Users\\Stran\\Documents\\Codex\\2026-07-24\\geii\\github-sync\\data\\dances",
+  "datasetCount": 6,
+  "motionCount": 6,
+  "targetRecall": 0.8,
+  "targetFalseAcceptRate": 0.05,
+  "reliable": false,
+  "calibrations": [
+    {
+      "danceId": "cat",
+      "motionId": "cat-main",
+      "selected": {
+        "requiredParts": [
+          "pose"
+        ],
+        "positiveCases": 10,
+        "negativeCases": 50,
+        "visiblePositiveCases": 10,
+        "visibleNegativeCases": 50,
+        "threshold": 0.34,
+        "recall": 0.6,
+        "falseAcceptRate": 0.08,
+        "precision": 0.6,
+        "meanPositiveScore": 0.3298,
+        "minimumPositiveScore": 0.197,
+        "maximumNegativeScore": 0.384,
+        "reliable": false
+      },
+      "candidates": [
+        {
+          "requiredParts": [
+            "pose"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 50,
+          "threshold": 0.34,
+          "recall": 0.6,
+          "falseAcceptRate": 0.08,
+          "precision": 0.6,
+          "meanPositiveScore": 0.3298,
+          "minimumPositiveScore": 0.197,
+          "maximumNegativeScore": 0.384,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 9,
+          "visibleNegativeCases": 41,
+          "threshold": 0.33,
+          "recall": 0.4,
+          "falseAcceptRate": 0.02,
+          "precision": 0.8,
+          "meanPositiveScore": 0.2934,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.366,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 5,
+          "visibleNegativeCases": 32,
+          "threshold": 0.33,
+          "recall": 0.2,
+          "falseAcceptRate": 0.02,
+          "precision": 0.6666666666666666,
+          "meanPositiveScore": 0.14949999999999997,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.355,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 5,
+          "visibleNegativeCases": 34,
+          "threshold": 0.35,
+          "recall": 0.2,
+          "falseAcceptRate": 0.02,
+          "precision": 0.6666666666666666,
+          "meanPositiveScore": 0.1565,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.37,
+          "reliable": false
+        }
+      ]
+    },
+    {
+      "danceId": "cloud",
+      "motionId": "cloud-main",
+      "selected": {
+        "requiredParts": [
+          "pose",
+          "left_hand"
+        ],
+        "positiveCases": 10,
+        "negativeCases": 50,
+        "visiblePositiveCases": 7,
+        "visibleNegativeCases": 43,
+        "threshold": 0.32,
+        "recall": 0.4,
+        "falseAcceptRate": 0.08,
+        "precision": 0.5,
+        "meanPositiveScore": 0.2184,
+        "minimumPositiveScore": 0,
+        "maximumNegativeScore": 0.35,
+        "reliable": false
+      },
+      "candidates": [
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 7,
+          "visibleNegativeCases": 43,
+          "threshold": 0.32,
+          "recall": 0.4,
+          "falseAcceptRate": 0.08,
+          "precision": 0.5,
+          "meanPositiveScore": 0.2184,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.35,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 50,
+          "threshold": 0.35,
+          "recall": 0.3,
+          "falseAcceptRate": 0.02,
+          "precision": 0.75,
+          "meanPositiveScore": 0.31999999999999995,
+          "minimumPositiveScore": 0.228,
+          "maximumNegativeScore": 0.37,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 5,
+          "visibleNegativeCases": 34,
+          "threshold": 0.32,
+          "recall": 0.3,
+          "falseAcceptRate": 0.08,
+          "precision": 0.42857142857142855,
+          "meanPositiveScore": 0.1552,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.349,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 5,
+          "visibleNegativeCases": 32,
+          "threshold": 0.31,
+          "recall": 0.2,
+          "falseAcceptRate": 0.06,
+          "precision": 0.4,
+          "meanPositiveScore": 0.1465,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.333,
+          "reliable": false
+        }
+      ]
+    },
+    {
+      "danceId": "fade",
+      "motionId": "fade-main",
+      "selected": {
+        "requiredParts": [
+          "pose",
+          "right_hand"
+        ],
+        "positiveCases": 10,
+        "negativeCases": 50,
+        "visiblePositiveCases": 10,
+        "visibleNegativeCases": 29,
+        "threshold": 0.33,
+        "recall": 0.4,
+        "falseAcceptRate": 0.04,
+        "precision": 0.6666666666666666,
+        "meanPositiveScore": 0.3101,
+        "minimumPositiveScore": 0.235,
+        "maximumNegativeScore": 0.381,
+        "reliable": false
+      },
+      "candidates": [
+        {
+          "requiredParts": [
+            "pose",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 29,
+          "threshold": 0.33,
+          "recall": 0.4,
+          "falseAcceptRate": 0.04,
+          "precision": 0.6666666666666666,
+          "meanPositiveScore": 0.3101,
+          "minimumPositiveScore": 0.235,
+          "maximumNegativeScore": 0.381,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 50,
+          "threshold": 0.35,
+          "recall": 0.4,
+          "falseAcceptRate": 0.06,
+          "precision": 0.5714285714285714,
+          "meanPositiveScore": 0.32889999999999997,
+          "minimumPositiveScore": 0.245,
+          "maximumNegativeScore": 0.408,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 8,
+          "visibleNegativeCases": 29,
+          "threshold": 0.31,
+          "recall": 0.3,
+          "falseAcceptRate": 0.04,
+          "precision": 0.6,
+          "meanPositiveScore": 0.2383,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.363,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 8,
+          "visibleNegativeCases": 42,
+          "threshold": 0.34,
+          "recall": 0.2,
+          "falseAcceptRate": 0.02,
+          "precision": 0.6666666666666666,
+          "meanPositiveScore": 0.25050000000000006,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.385,
+          "reliable": false
+        }
+      ]
+    },
+    {
+      "danceId": "fight",
+      "motionId": "fight-main",
+      "selected": {
+        "requiredParts": [
+          "pose",
+          "left_hand"
+        ],
+        "positiveCases": 10,
+        "negativeCases": 50,
+        "visiblePositiveCases": 10,
+        "visibleNegativeCases": 40,
+        "threshold": 0.35,
+        "recall": 0.6,
+        "falseAcceptRate": 0.04,
+        "precision": 0.75,
+        "meanPositiveScore": 0.4628,
+        "minimumPositiveScore": 0.236,
+        "maximumNegativeScore": 0.386,
+        "reliable": false
+      },
+      "candidates": [
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 40,
+          "threshold": 0.35,
+          "recall": 0.6,
+          "falseAcceptRate": 0.04,
+          "precision": 0.75,
+          "meanPositiveScore": 0.4628,
+          "minimumPositiveScore": 0.236,
+          "maximumNegativeScore": 0.386,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 8,
+          "visibleNegativeCases": 29,
+          "threshold": 0.36,
+          "recall": 0.5,
+          "falseAcceptRate": 0.02,
+          "precision": 0.8333333333333334,
+          "meanPositiveScore": 0.3956,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.372,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 8,
+          "visibleNegativeCases": 31,
+          "threshold": 0.37,
+          "recall": 0.5,
+          "falseAcceptRate": 0.02,
+          "precision": 0.8333333333333334,
+          "meanPositiveScore": 0.40190000000000003,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.394,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 50,
+          "threshold": 0.39,
+          "recall": 0.5,
+          "falseAcceptRate": 0.02,
+          "precision": 0.8333333333333334,
+          "meanPositiveScore": 0.4737000000000001,
+          "minimumPositiveScore": 0.241,
+          "maximumNegativeScore": 0.412,
+          "reliable": false
+        }
+      ]
+    },
+    {
+      "danceId": "indo",
+      "motionId": "indo-main",
+      "selected": {
+        "requiredParts": [
+          "pose",
+          "left_hand"
+        ],
+        "positiveCases": 10,
+        "negativeCases": 50,
+        "visiblePositiveCases": 10,
+        "visibleNegativeCases": 40,
+        "threshold": 0.33,
+        "recall": 1,
+        "falseAcceptRate": 0.14,
+        "precision": 0.5882352941176471,
+        "meanPositiveScore": 0.36899999999999994,
+        "minimumPositiveScore": 0.33,
+        "maximumNegativeScore": 0.386,
+        "reliable": false
+      },
+      "candidates": [
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 40,
+          "threshold": 0.33,
+          "recall": 1,
+          "falseAcceptRate": 0.14,
+          "precision": 0.5882352941176471,
+          "meanPositiveScore": 0.36899999999999994,
+          "minimumPositiveScore": 0.33,
+          "maximumNegativeScore": 0.386,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 50,
+          "threshold": 0.35,
+          "recall": 1,
+          "falseAcceptRate": 0.16,
+          "precision": 0.5555555555555556,
+          "meanPositiveScore": 0.3836,
+          "minimumPositiveScore": 0.352,
+          "maximumNegativeScore": 0.412,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 8,
+          "visibleNegativeCases": 29,
+          "threshold": 0.31,
+          "recall": 0.8,
+          "falseAcceptRate": 0.08,
+          "precision": 0.6666666666666666,
+          "meanPositiveScore": 0.2776,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.372,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 8,
+          "visibleNegativeCases": 31,
+          "threshold": 0.33,
+          "recall": 0.8,
+          "falseAcceptRate": 0.1,
+          "precision": 0.6153846153846154,
+          "meanPositiveScore": 0.2867,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.394,
+          "reliable": false
+        }
+      ]
+    },
+    {
+      "danceId": "no",
+      "motionId": "no-main",
+      "selected": {
+        "requiredParts": [
+          "pose",
+          "left_hand"
+        ],
+        "positiveCases": 10,
+        "negativeCases": 50,
+        "visiblePositiveCases": 6,
+        "visibleNegativeCases": 44,
+        "threshold": 0.4,
+        "recall": 0.2,
+        "falseAcceptRate": 0,
+        "precision": 1,
+        "meanPositiveScore": 0.20459999999999998,
+        "minimumPositiveScore": 0,
+        "maximumNegativeScore": 0.368,
+        "reliable": false
+      },
+      "candidates": [
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 6,
+          "visibleNegativeCases": 44,
+          "threshold": 0.4,
+          "recall": 0.2,
+          "falseAcceptRate": 0,
+          "precision": 1,
+          "meanPositiveScore": 0.20459999999999998,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.368,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 10,
+          "visibleNegativeCases": 50,
+          "threshold": 0.42,
+          "recall": 0.2,
+          "falseAcceptRate": 0,
+          "precision": 1,
+          "meanPositiveScore": 0.3376,
+          "minimumPositiveScore": 0.258,
+          "maximumNegativeScore": 0.381,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "left_hand",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 3,
+          "visibleNegativeCases": 34,
+          "threshold": 0.38,
+          "recall": 0.1,
+          "falseAcceptRate": 0,
+          "precision": 1,
+          "meanPositiveScore": 0.10089999999999999,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.344,
+          "reliable": false
+        },
+        {
+          "requiredParts": [
+            "pose",
+            "right_hand"
+          ],
+          "positiveCases": 10,
+          "negativeCases": 50,
+          "visiblePositiveCases": 3,
+          "visibleNegativeCases": 36,
+          "threshold": 0.4,
+          "recall": 0.1,
+          "falseAcceptRate": 0,
+          "precision": 1,
+          "meanPositiveScore": 0.1048,
+          "minimumPositiveScore": 0,
+          "maximumNegativeScore": 0.357,
+          "reliable": false
+        }
+      ]
+    }
+  ]
+}

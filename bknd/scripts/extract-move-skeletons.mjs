@@ -19,7 +19,7 @@ const videoRoot = resolve(process.argv[2] || "D:\\move");
 const outputRoot = resolve(projectRoot, "bknd", "data");
 const sampleFps = 10;
 const expectedGroups = ["cat", "cloud", "fade", "fight", "indo", "no"];
-const skippedVideos = ["cat (4).mp4"];
+const skippedVideos = ["cat (10).mp4"];
 const visionBundle = resolve(
   projectRoot,
   "ftnd",

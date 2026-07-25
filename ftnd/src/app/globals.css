@@ -1602,7 +1602,7 @@ h6 {
 .liquid-coach.is-floating .liquid-coach-surface {
   max-height: calc(100dvh - 24px);
   border-radius: 26px;
-  animation: coach-float-settle 520…483 tokens truncated…ay: grid;
+  animation: coach-float-settle 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
   place-items: center;
   border-radius: 50%;
   color: #04100f;

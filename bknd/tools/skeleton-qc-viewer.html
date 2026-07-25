@@ -1,566 +1,427 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MediaPipe 骨架重合度检查</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #071013;
-      --panel: rgba(15, 29, 34, 0.92);
-      --border: #274047;
-      --text: #f3f8f9;
-      --muted: #8fa7ad;
-      --cyan: #25f4ee;
-      --pink: #fe2c55;
-      --yellow: #ffd166;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at 15% 0%, rgba(37, 244, 238, 0.13), transparent 32rem),
-        radial-gradient(circle at 90% 5%, rgba(254, 44, 85, 0.1), transparent 30rem),
-        var(--bg);
-    }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: end;
-      gap: 24px;
-      padding: 24px 28px 18px;
-      border-bottom: 1px solid var(--border);
-    }
-    h1 { margin: 0 0 6px; font-size: clamp(22px, 3vw, 34px); }
-    .subtitle, .muted { color: var(--muted); }
-    .status {
-      padding: 8px 12px;
-      border: 1px solid rgba(37, 244, 238, 0.35);
-      border-radius: 999px;
-      color: var(--cyan);
-      background: rgba(37, 244, 238, 0.08);
-      white-space: nowrap;
-    }
-    main { padding: 20px 28px 32px; }
-    .toolbar, .stats {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(120px, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-      padding: 14px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-    }
-    label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
-    select, input[type="range"] { width: 100%; }
-    select, button {
-      min-height: 38px;
-      border: 1px solid #36545d;
-      border-radius: 9px;
-      color: var(--text);
-      background: #101f24;
-      padding: 0 10px;
-    }
-    button { cursor: pointer; font-weight: 700; }
-    button:hover { border-color: var(--cyan); }
-    .check { display: flex; align-items: center; gap: 8px; min-height: 38px; }
-    .stage {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    .card {
-      min-width: 0;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      background: var(--panel);
-    }
-    .card-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 52px;
-      padding: 0 16px;
-      border-bottom: 1px solid var(--border);
-      font-weight: 800;
-    }
-    .video-shell {
-      display: grid;
-      place-items: center;
-      min-height: 420px;
-      max-height: 68vh;
-      overflow: hidden;
-      background:
-        linear-gradient(45deg, #0a1519 25%, transparent 25%),
-        linear-gradient(-45deg, #0a1519 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, #0a1519 75%),
-        linear-gradient(-45deg, transparent 75%, #0a1519 75%),
-        #0d1a1e;
-      background-size: 24px 24px;
-      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
-    }
-    video, canvas {
-      display: block;
-      max-width: 100%;
-      max-height: 68vh;
-      object-fit: contain;
-    }
-    .overlay-stack {
-      position: relative;
-      display: grid;
-      place-items: center;
-      max-width: 100%;
-      max-height: 68vh;
-    }
-    .overlay-stack video {
-      grid-area: 1 / 1;
-    }
-    .overlay-stack canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-    .mirrored { transform: scaleX(-1); }
-    .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 16px; color: var(--muted); font-size: 12px; }
-    .dot { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; }
-    .stats { grid-template-columns: repeat(5, 1fr); margin-top: 16px; margin-bottom: 0; }
-    .metric { padding: 4px 6px; }
-    .metric strong { display: block; margin-top: 5px; font-size: 18px; color: var(--cyan); }
-    .warning { color: var(--yellow); }
-    .monitor {
-      margin-bottom: 16px;
-      padding: 16px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: var(--panel);
-    }
-    .monitor-head, .monitor-summary {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-    .monitor-head h2 { margin: 0; font-size: 17px; }
-    .run-state { color: var(--cyan); font-weight: 800; }
-    .run-state.stopped { color: var(--pink); }
-    .progress-track {
-      height: 12px;
-      margin: 13px 0 9px;
-      overflow: hidden;
-      border-radius: 999px;
-      background: #203037;
-    }
-    .progress-fill {
-      width: 0;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, var(--cyan), #4c8cff);
-      transition: width 0.5s ease;
-    }
-    .current-task { margin-top: 11px; color: var(--text); }
-    .group-progress {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 8px;
-      margin-top: 13px;
-    }
-    .group-chip {
-      padding: 9px 10px;
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      color: var(--muted);
-      background: rgba(7, 16, 19, 0.5);
-      font-size: 12px;
-    }
-    .group-chip strong { display: block; margin-bottom: 3px; color: var(--text); font-size: 14px; }
-    details { margin-top: 12px; color: var(--muted); font-size: 12px; }
-    #recentLog {
-      max-height: 130px;
-      overflow: auto;
-      white-space: pre-wrap;
-      line-height: 1.55;
-    }
-    @media (max-width: 980px) {
-      .toolbar { grid-template-columns: repeat(2, 1fr); }
-      .stage { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: repeat(2, 1fr); }
-      .group-progress { grid-template-columns: repeat(2, 1fr); }
-      .video-shell { min-height: 300px; }
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <div>
-      <h1>MediaPipe 骨架重合度检查</h1>
-      <div class="subtitle">左侧原视频，右侧同一帧叠加骨架；两边使用完全相同的播放时间。</div>
-    </div>
-    <div id="status" class="status">正在读取数据…</div>
-  </header>
-  <main>
-    <section class="monitor" aria-label="骨架数据提取进度">
-      <div class="monitor-head">
-        <h2>数据提取实时进度</h2>
-        <span id="runState" class="run-state">连接中…</span>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MediaPipe 动作范本评估</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #071013;
+        --panel: rgba(15, 29, 34, 0.94);
+        --border: #29434b;
+        --text: #f3f8f9;
+        --muted: #96aeb4;
+        --cyan: #25f4ee;
+        --pink: #fe2c55;
+        --yellow: #ffd166;
+        --green: #49dd92;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        font-family:
+          Inter,
+          'Microsoft YaHei',
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background:
+          radial-gradient(
+            circle at 12% 0%,
+            rgba(37, 244, 238, 0.13),
+            transparent 34rem
+          ),
+          radial-gradient(
+            circle at 92% 4%,
+            rgba(254, 44, 85, 0.11),
+            transparent 32rem
+          ),
+          var(--bg);
+      }
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 24px 28px 18px;
+        border-bottom: 1px solid var(--border);
+      }
+      h1 {
+        margin: 0 0 7px;
+        font-size: clamp(24px, 3vw, 36px);
+      }
+      h2,
+      p {
+        margin: 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .status {
+        max-width: min(560px, 46vw);
+        padding: 9px 13px;
+        border: 1px solid rgba(37, 244, 238, 0.38);
+        border-radius: 999px;
+        color: var(--cyan);
+        background: rgba(37, 244, 238, 0.08);
+        text-align: right;
+      }
+      main {
+        padding: 20px 28px 34px;
+      }
+      .toolbar,
+      .metrics,
+      .notice {
+        margin-bottom: 16px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--panel);
+      }
+      .toolbar {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.35fr auto auto;
+        gap: 12px;
+        align-items: end;
+      }
+      label {
+        display: grid;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      select,
+      input[type='file'],
+      button {
+        width: 100%;
+        min-height: 42px;
+        padding: 8px 11px;
+        border: 1px solid #3a5962;
+        border-radius: 9px;
+        color: var(--text);
+        background: #101f24;
+      }
+      button {
+        width: auto;
+        min-width: 132px;
+        cursor: pointer;
+        font-weight: 800;
+      }
+      button.primary {
+        border-color: rgba(37, 244, 238, 0.6);
+        color: #04272a;
+        background: var(--cyan);
+      }
+      button:disabled {
+        cursor: wait;
+        opacity: 0.55;
+      }
+      .check {
+        display: flex;
+        min-height: 42px;
+        align-items: center;
+        gap: 8px;
+        color: var(--text);
+        white-space: nowrap;
+      }
+      .progress {
+        display: none;
+        height: 10px;
+        margin-top: 12px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #203239;
+      }
+      .progress.active {
+        display: block;
+      }
+      .progress > div {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--cyan), #5995ff);
+        transition: width 0.2s ease;
+      }
+      .stage {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--panel);
+      }
+      .card-title {
+        display: flex;
+        min-height: 54px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .video-shell {
+        display: grid;
+        min-height: 470px;
+        max-height: 67vh;
+        place-items: center;
+        overflow: hidden;
+        background:
+          linear-gradient(45deg, #0a1519 25%, transparent 25%),
+          linear-gradient(-45deg, #0a1519 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #0a1519 75%),
+          linear-gradient(-45deg, transparent 75%, #0a1519 75%), #0d1a1e;
+        background-position:
+          0 0,
+          0 12px,
+          12px -12px,
+          -12px 0;
+        background-size: 24px 24px;
+      }
+      .overlay-stack {
+        position: relative;
+        display: grid;
+        max-width: 100%;
+        max-height: 67vh;
+        place-items: center;
+      }
+      video,
+      canvas {
+        display: block;
+        max-width: 100%;
+        max-height: 67vh;
+        object-fit: contain;
+      }
+      .overlay-stack video,
+      .overlay-stack canvas {
+        grid-area: 1 / 1;
+      }
+      .overlay-stack canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .mirrored {
+        transform: scaleX(-1);
+      }
+      .legend {
+        display: flex;
+        min-height: 48px;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 16px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .dot {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        margin-right: 5px;
+        border-radius: 50%;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(100px, 1fr));
+        margin-top: 16px;
+        margin-bottom: 0;
+      }
+      .metric {
+        min-width: 0;
+        padding: 7px 10px;
+        border-right: 1px solid var(--border);
+      }
+      .metric:last-child {
+        border-right: 0;
+      }
+      .metric strong {
+        display: block;
+        margin-top: 6px;
+        overflow: hidden;
+        color: var(--cyan);
+        font-size: 20px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #overallScore {
+        color: var(--green);
+        font-size: 26px;
+      }
+      .notice {
+        margin-top: 16px;
+        margin-bottom: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+      .warning {
+        color: var(--yellow);
+      }
+      @media (max-width: 1060px) {
+        .toolbar {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .stage {
+          grid-template-columns: 1fr;
+        }
+        .metrics {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .metric {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+        .video-shell {
+          min-height: 340px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>MediaPipe 动作范本评估</h1>
+        <p class="muted">
+          左侧查看标准范本，右侧导入本地视频并提取骨架；视频不会上传。
+        </p>
       </div>
-      <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
-      <div class="monitor-summary">
-        <strong id="progressSummary">正在读取进度…</strong>
-        <span id="lastUpdate" class="muted">—</span>
-      </div>
-      <div id="currentTask" class="current-task">当前任务：—</div>
-      <div id="groupProgress" class="group-progress"></div>
-      <details>
-        <summary>最近处理记录</summary>
-        <pre id="recentLog"></pre>
-      </details>
-    </section>
-    <section class="toolbar">
-      <label>动作数据集
-        <select id="datasetSelect"></select>
-      </label>
-      <label>视频样本
-        <select id="videoSelect"></select>
-      </label>
-      <label>骨架透明度 <span id="opacityValue">90%</span>
-        <input id="opacity" type="range" min="10" max="100" value="90">
-      </label>
-      <label>骨架线宽 <span id="lineWidthValue">4px</span>
-        <input id="lineWidth" type="range" min="1" max="10" value="4">
-      </label>
-      <label>节点大小 <span id="pointSizeValue">5px</span>
-        <input id="pointSize" type="range" min="1" max="12" value="5">
-      </label>
-      <label>显示设置
-        <span class="check"><input id="mirror" type="checkbox"> 镜像查看（视频和骨架同时翻转）</span>
-      </label>
-    </section>
+      <div id="status" class="status">正在读取动作数据……</div>
+    </header>
 
-    <section class="stage">
-      <article class="card">
-        <div class="card-title"><span>原视频</span><span class="muted">Original</span></div>
-        <div class="video-shell"><video id="video" controls playsinline preload="metadata"></video></div>
-        <div class="legend">用于检查人物本身的位置与动作。</div>
-      </article>
-      <article class="card">
-        <div class="card-title"><span>骨架叠加</span><span class="muted">Overlay</span></div>
-        <div class="video-shell">
-          <div id="overlayStack" class="overlay-stack">
-            <video id="overlayVideo" muted playsinline preload="metadata"></video>
-            <canvas id="overlay"></canvas>
+    <main>
+      <section class="toolbar">
+        <label>
+          动作类别
+          <select id="datasetSelect"></select>
+        </label>
+        <label>
+          标准范本
+          <select id="referenceSelect"></select>
+        </label>
+        <label>
+          导入待评估视频
+          <input
+            id="videoFile"
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime,video/*"
+          />
+        </label>
+        <label>
+          判例方向
+          <span class="check">
+            <input id="mirrorInput" type="checkbox" />
+            输入视频为镜像
+          </span>
+        </label>
+        <button id="analyzeButton" class="primary" type="button" disabled>
+          提取并评估
+        </button>
+      </section>
+
+      <div id="progress" class="progress" aria-label="分析进度">
+        <div id="progressFill"></div>
+      </div>
+
+      <section class="stage">
+        <article class="card">
+          <div class="card-title">
+            <h2>标准范本骨架</h2>
+            <span id="referenceInfo" class="muted">—</span>
           </div>
+          <div class="video-shell">
+            <div class="overlay-stack">
+              <video
+                id="referenceVideo"
+                controls
+                muted
+                playsinline
+                preload="metadata"
+              ></video>
+              <canvas id="referenceCanvas"></canvas>
+            </div>
+          </div>
+          <div class="legend">
+            <span><i class="dot" style="background: #25f4ee"></i>身体</span>
+            <span><i class="dot" style="background: #fe2c55"></i>左手</span>
+            <span><i class="dot" style="background: #ffd166"></i>右手</span>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-title">
+            <h2>导入判例骨架</h2>
+            <span id="caseInfo" class="muted">等待导入视频</span>
+          </div>
+          <div class="video-shell">
+            <div id="caseStack" class="overlay-stack">
+              <video
+                id="caseVideo"
+                controls
+                muted
+                playsinline
+                preload="metadata"
+              ></video>
+              <canvas id="caseCanvas"></canvas>
+            </div>
+          </div>
+          <div class="legend">
+            <span><i class="dot" style="background: #25f4ee"></i>身体</span>
+            <span><i class="dot" style="background: #fe2c55"></i>左手</span>
+            <span><i class="dot" style="background: #ffd166"></i>右手</span>
+            <span id="caseWarning" class="warning"></span>
+          </div>
+        </article>
+      </section>
+
+      <section class="metrics" aria-label="评估结果">
+        <div class="metric">
+          <span class="muted">动作相似度</span>
+          <strong id="overallScore">—</strong>
         </div>
-        <div class="legend">
-          <span><i class="dot" style="background:#25f4ee"></i>身体</span>
-          <span><i class="dot" style="background:#fe2c55"></i>左手</span>
-          <span><i class="dot" style="background:#ffd166"></i>右手</span>
-          <span id="frameWarning" class="warning"></span>
+        <div class="metric">
+          <span class="muted">Pose</span>
+          <strong id="poseScore">—</strong>
         </div>
-      </article>
-    </section>
+        <div class="metric">
+          <span class="muted">左手</span>
+          <strong id="leftScore">—</strong>
+        </div>
+        <div class="metric">
+          <span class="muted">右手</span>
+          <strong id="rightScore">—</strong>
+        </div>
+        <div class="metric">
+          <span class="muted">轨迹</span>
+          <strong id="trajectoryScore">—</strong>
+        </div>
+        <div class="metric">
+          <span class="muted">骨架覆盖</span>
+          <strong id="coverageScore">—</strong>
+        </div>
+        <div class="metric">
+          <span class="muted">最接近范本</span>
+          <strong id="bestTemplate">—</strong>
+        </div>
+      </section>
 
-    <section class="stats">
-      <div class="metric"><span class="muted">骨架数据帧</span><strong id="frameCount">—</strong></div>
-      <div class="metric"><span class="muted">姿态覆盖率</span><strong id="poseCoverage">—</strong></div>
-      <div class="metric"><span class="muted">手部覆盖率</span><strong id="handCoverage">—</strong></div>
-      <div class="metric"><span class="muted">当前匹配帧误差</span><strong id="frameDelta">—</strong></div>
-      <div class="metric"><span class="muted">原始分辨率</span><strong id="resolution">—</strong></div>
-    </section>
-  </main>
+      <section class="notice">
+        <strong id="decisionText">尚未评估。</strong>
+        <span id="evaluationNote">
+          “动作相似度”是当前视频与同类范本的骨架匹配分，不是模型在大规模测试集上的统计准确率。
+        </span>
+      </section>
+    </main>
 
-  <script>
-    const POSE_CONNECTIONS = [
-      [0,1],[1,2],[2,3],[3,7],[0,4],[4,5],[5,6],[6,8],[9,10],
-      [11,12],[11,13],[13,15],[15,17],[15,19],[15,21],[17,19],
-      [12,14],[14,16],[16,18],[16,20],[16,22],[18,20],
-      [11,23],[12,24],[23,24],[23,25],[25,27],[27,29],[29,31],[27,31],
-      [24,26],[26,28],[28,30],[30,32],[28,32]
-    ];
-    const HAND_CONNECTIONS = [
-      [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],
-      [10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[0,17],
-      [17,18],[18,19],[19,20]
-    ];
-
-    const elements = {
-      dataset: document.querySelector("#datasetSelect"),
-      videoChoice: document.querySelector("#videoSelect"),
-      video: document.querySelector("#video"),
-      overlayVideo: document.querySelector("#overlayVideo"),
-      overlayStack: document.querySelector("#overlayStack"),
-      canvas: document.querySelector("#overlay"),
-      status: document.querySelector("#status"),
-      opacity: document.querySelector("#opacity"),
-      lineWidth: document.querySelector("#lineWidth"),
-      pointSize: document.querySelector("#pointSize"),
-      mirror: document.querySelector("#mirror"),
-      frameWarning: document.querySelector("#frameWarning"),
-      frameCount: document.querySelector("#frameCount"),
-      poseCoverage: document.querySelector("#poseCoverage"),
-      handCoverage: document.querySelector("#handCoverage"),
-      frameDelta: document.querySelector("#frameDelta"),
-      resolution: document.querySelector("#resolution"),
-    };
-
-    let catalog = [];
-    let dataset = null;
-    let selectedVideo = null;
-    let renderHandle = 0;
-    const query = new URLSearchParams(location.search);
-    const requestedDataset = query.get("dataset");
-    const requestedVideo = query.get("video");
-
-    const percent = (value) => Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "—";
-    const encodePath = (name) => name.split("/").map(encodeURIComponent).join("/");
-    const stageLabels = {
-      "html-loaded": "页面已启动",
-      "page-start": "任务初始化",
-      "module-loaded": "MediaPipe已加载",
-      "model-loading": "正在加载模型",
-      "video-loading": "正在读取视频",
-      "transcoding": "正在转换H.265为H.264",
-      "extracting": "正在提取骨架",
-      "saving": "正在保存JSON",
-    };
-
-    async function refreshProgress() {
-      const stateElement = document.querySelector("#runState");
-      try {
-        const response = await fetch("/api/progress", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const progress = await response.json();
-        stateElement.textContent = progress.running ? "后台运行中" : "后台已停止";
-        stateElement.classList.toggle("stopped", !progress.running);
-        const processed =
-          progress.totals.successful + progress.totals.failed + progress.totals.skipped;
-        document.querySelector("#progressFill").style.width =
-          `${Math.min(100, processed / 60 * 100)}%`;
-        document.querySelector("#progressSummary").textContent =
-          `${processed}/60 已处理 · ${progress.totals.successful} 成功 · ` +
-          `${progress.totals.failed} 失败 · ${progress.totals.skipped} 跳过`;
-        document.querySelector("#lastUpdate").textContent = progress.updatedAt
-          ? `更新于 ${new Date(progress.updatedAt).toLocaleTimeString()}`
-          : "暂无日志";
-        const current = progress.current;
-        document.querySelector("#currentTask").textContent = current
-          ? `当前任务：${current.file} · ${stageLabels[current.stage] || current.stage}` +
-            `${Number.isFinite(current.progress) ? ` · ${current.progress}%` : ""}`
-          : "当前任务：等待新进度";
-        document.querySelector("#groupProgress").innerHTML = progress.groups.map((group) =>
-          `<div class="group-chip"><strong>${group.name}</strong>` +
-          `${group.successful}成功 · ${group.failed}失败 · ${group.pending}待处理</div>`
-        ).join("");
-        document.querySelector("#recentLog").textContent =
-          progress.recentLog.slice(-8).join("\n");
-      } catch (error) {
-        stateElement.textContent = "进度连接失败";
-        stateElement.classList.add("stopped");
-        document.querySelector("#currentTask").textContent =
-          `无法读取进度：${String(error?.message || error)}`;
-      }
-    }
-
-    function nearestFrame(frames, timestampMs) {
-      if (!frames?.length) return null;
-      let low = 0;
-      let high = frames.length - 1;
-      while (low < high) {
-        const middle = Math.floor((low + high) / 2);
-        if (frames[middle].timestampMs < timestampMs) low = middle + 1;
-        else high = middle;
-      }
-      const after = frames[low];
-      const before = frames[Math.max(0, low - 1)];
-      return Math.abs(after.timestampMs - timestampMs) < Math.abs(before.timestampMs - timestampMs)
-        ? after : before;
-    }
-
-    function drawLandmarks(context, points, connections, color, scale, useVisibility) {
-      if (!points?.length) return;
-      const visible = (point) =>
-        point && (!useVisibility || point.visibility == null || point.visibility >= 0.25);
-      context.strokeStyle = color;
-      context.fillStyle = color;
-      context.lineWidth = Number(elements.lineWidth.value) * scale;
-      context.lineCap = "round";
-      context.lineJoin = "round";
-      for (const [start, end] of connections) {
-        const a = points[start];
-        const b = points[end];
-        if (!visible(a) || !visible(b)) continue;
-        context.beginPath();
-        context.moveTo(a.x * context.canvas.width, a.y * context.canvas.height);
-        context.lineTo(b.x * context.canvas.width, b.y * context.canvas.height);
-        context.stroke();
-      }
-      const radius = Number(elements.pointSize.value) * scale;
-      for (const point of points) {
-        if (!visible(point)) continue;
-        context.beginPath();
-        context.arc(point.x * context.canvas.width, point.y * context.canvas.height, radius, 0, Math.PI * 2);
-        context.fill();
-      }
-    }
-
-    function render() {
-      const video = elements.video;
-      const canvas = elements.canvas;
-      const context = canvas.getContext("2d");
-      if (!context || !video.videoWidth || !video.videoHeight) return;
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      if (Math.abs(elements.overlayVideo.currentTime - video.currentTime) > 0.12) {
-        elements.overlayVideo.currentTime = video.currentTime;
-      }
-      const frame = nearestFrame(selectedVideo?.frames, video.currentTime * 1000);
-      if (frame) {
-        const delta = Math.abs(frame.timestampMs - video.currentTime * 1000);
-        elements.frameDelta.textContent = `${Math.round(delta)} ms`;
-        elements.frameWarning.textContent = delta > 180 ? "当前附近没有可靠骨架帧" : "";
-        if (delta <= 250) {
-          context.save();
-          context.globalAlpha = Number(elements.opacity.value) / 100;
-          const scale = Math.max(0.65, Math.min(canvas.width, canvas.height) / 720);
-          drawLandmarks(context, frame.pose, POSE_CONNECTIONS, "#25f4ee", scale, true);
-          drawLandmarks(context, frame.leftHand, HAND_CONNECTIONS, "#fe2c55", scale, false);
-          drawLandmarks(context, frame.rightHand, HAND_CONNECTIONS, "#ffd166", scale, false);
-          context.restore();
-        }
-      } else {
-        elements.frameDelta.textContent = "无骨架帧";
-        elements.frameWarning.textContent = "该视频没有可显示的骨架";
-      }
-    }
-
-    function scheduleRender() {
-      cancelAnimationFrame(renderHandle);
-      const tick = () => {
-        render();
-        if (!elements.video.paused && !elements.video.ended) {
-          renderHandle = requestAnimationFrame(tick);
-        }
-      };
-      renderHandle = requestAnimationFrame(tick);
-    }
-
-    async function loadDataset() {
-      const metadata = catalog[Number(elements.dataset.value)];
-      elements.status.textContent = `正在加载 ${metadata.title}…`;
-      dataset = await fetch(`/data/${encodePath(metadata.file)}`).then((response) => {
-        if (!response.ok) throw new Error(`JSON 加载失败：${response.status}`);
-        return response.json();
-      });
-      elements.videoChoice.innerHTML = dataset.videos.map((video, index) =>
-        `<option value="${index}">${video.sourceFile} · ${video.detectedFrameCount} 帧</option>`
-      ).join("");
-      if (!dataset.videos.length) throw new Error("该数据集没有有效视频");
-      const requestedVideoIndex = dataset.videos.findIndex(
-        (video) => video.sourceFile === requestedVideo,
-      );
-      if (requestedVideoIndex >= 0) {
-        elements.videoChoice.value = String(requestedVideoIndex);
-      }
-      await loadVideo();
-    }
-
-    async function loadVideo() {
-      selectedVideo = dataset.videos[Number(elements.videoChoice.value)];
-      elements.status.textContent = `正在加载 ${selectedVideo.sourceFile}…`;
-      elements.video.pause();
-      elements.overlayVideo.pause();
-      const sourceUrl = `/video/${encodePath(selectedVideo.sourceFile)}`;
-      elements.video.src = sourceUrl;
-      elements.overlayVideo.src = sourceUrl;
-      elements.video.load();
-      elements.overlayVideo.load();
-      elements.frameCount.textContent = selectedVideo.detectedFrameCount ?? selectedVideo.frames.length;
-      elements.poseCoverage.textContent = percent(selectedVideo.poseCoverage);
-      elements.handCoverage.textContent = percent(selectedVideo.handCoverage);
-      elements.resolution.textContent = `${selectedVideo.width} × ${selectedVideo.height}`;
-      await Promise.all([elements.video, elements.overlayVideo].map((video) =>
-        new Promise((resolve, reject) => {
-          video.onloadeddata = resolve;
-          video.onerror = () => reject(new Error(`原视频无法播放：${selectedVideo.sourceFile}`));
-        })
-      ));
-      elements.overlayVideo.currentTime = elements.video.currentTime;
-      elements.status.textContent = `已同步：${selectedVideo.sourceFile}`;
-      render();
-    }
-
-    function updateMirror() {
-      elements.video.classList.toggle("mirrored", elements.mirror.checked);
-      elements.overlayStack.classList.toggle("mirrored", elements.mirror.checked);
-    }
-
-    async function init() {
-      refreshProgress();
-      window.setInterval(refreshProgress, 2000);
-      try {
-        const response = await fetch("/api/datasets");
-        const result = await response.json();
-        catalog = result.datasets.filter((item) => item.videos?.length);
-        if (!catalog.length) throw new Error("尚未找到可用的骨架 JSON");
-        elements.dataset.innerHTML = catalog.map((item, index) =>
-          `<option value="${index}">${item.title}（${item.videos.length} 个有效视频）</option>`
-        ).join("");
-        const requestedDatasetIndex = catalog.findIndex(
-          (item) =>
-            item.datasetId === requestedDataset ||
-            item.file === requestedDataset ||
-            item.title === requestedDataset,
-        );
-        if (requestedDatasetIndex >= 0) {
-          elements.dataset.value = String(requestedDatasetIndex);
-        }
-        await loadDataset();
-      } catch (error) {
-        elements.status.textContent = "加载失败";
-        elements.frameWarning.textContent = String(error?.message || error);
-      }
-    }
-
-    elements.dataset.addEventListener("change", loadDataset);
-    elements.videoChoice.addEventListener("change", loadVideo);
-    elements.video.addEventListener("play", async () => {
-      elements.overlayVideo.currentTime = elements.video.currentTime;
-      try { await elements.overlayVideo.play(); } catch {}
-      scheduleRender();
-    });
-    elements.video.addEventListener("pause", () => {
-      elements.overlayVideo.pause();
-      render();
-    });
-    elements.video.addEventListener("seeked", () => {
-      elements.overlayVideo.currentTime = elements.video.currentTime;
-      render();
-    });
-    elements.video.addEventListener("timeupdate", () => {
-      if (Math.abs(elements.overlayVideo.currentTime - elements.video.currentTime) > 0.12) {
-        elements.overlayVideo.currentTime = elements.video.currentTime;
-      }
-      render();
-    });
-    elements.mirror.addEventListener("change", updateMirror);
-    for (const input of [elements.opacity, elements.lineWidth, elements.pointSize]) {
-      input.addEventListener("input", () => {
-        document.querySelector(`#${input.id}Value`).textContent =
-          input.id === "opacity" ? `${input.value}%` : `${input.value}px`;
-        render();
-      });
-    }
-    init();
-  </script>
-</body>
+    <script type="module" src="/viewer.js"></script>
+  </body>
 </html>

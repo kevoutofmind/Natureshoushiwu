@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  MotionKeyframeDefinition,
   MotionReferenceTemplate,
   MotionTemplatePack,
   PracticeSkeletonObservation,
@@ -81,7 +82,13 @@ export class SkeletonTemplateMatcherEngine {
     }
 
     const templateScores = pack.templates.map((template) =>
-      this.compareTemplate(template, input.observation, requiredParts),
+      this.compareTemplate(
+        template,
+        input.observation,
+        requiredParts,
+        pack.keyframes,
+        pack.evaluationPolicy?.keyframeTrajectoryWeight,
+      ),
     );
     const best = templateScores.sort(
       (left, right) => right.scores.overall - left.scores.overall,
@@ -181,6 +188,8 @@ export class SkeletonTemplateMatcherEngine {
     template: MotionReferenceTemplate,
     observation: PracticeSkeletonObservation,
     requiredParts: RequiredSkeletonPart[],
+    keyframes: MotionKeyframeDefinition[] | undefined,
+    configuredKeyframeWeight: number | undefined,
   ): TemplateScore {
     const practiceFrames =
       template.mirrored === observation.mirrored
@@ -229,12 +238,24 @@ export class SkeletonTemplateMatcherEngine {
       sampledReference,
       sampledPractice,
     );
+    const keyframeTrajectory = this.keyframeTrajectorySimilarity(
+      template.templateId,
+      template.frames,
+      practiceFrames,
+      keyframes,
+      requiredParts,
+      observation.progress,
+    );
     const visibility = this.requiredVisibility(practiceFrames, requiredParts);
+    const keyframeWeight =
+      configuredKeyframeWeight ??
+      TEMPLATE_MATCHER_CONFIG.keyframeTrajectoryWeight;
     const components: Array<[number | undefined, number]> = [
       [pose, 0.5],
       [leftHand, requiredParts.includes('left_hand') ? 0.2 : 0.1],
       [rightHand, requiredParts.includes('right_hand') ? 0.2 : 0.1],
       [trajectory, 0.1],
+      [keyframeTrajectory, keyframeWeight],
     ];
     const available = components.filter(
       (component): component is [number, number] =>
@@ -257,6 +278,7 @@ export class SkeletonTemplateMatcherEngine {
         leftHand: this.optionalRound(leftHand),
         rightHand: this.optionalRound(rightHand),
         trajectory: this.optionalRound(trajectory),
+        keyframeTrajectory: this.optionalRound(keyframeTrajectory),
         visibility: this.round(visibility),
       },
     };
@@ -385,6 +407,167 @@ export class SkeletonTemplateMatcherEngine {
       y: (point.y - wrist.y) / scale,
       z: ((point.z ?? 0) - (wrist.z ?? 0)) / scale,
     }));
+  }
+
+  private keyframeTrajectorySimilarity(
+    templateId: string,
+    referenceFrames: SkeletonFrame[],
+    practiceFrames: SkeletonFrame[],
+    keyframes: MotionKeyframeDefinition[] | undefined,
+    fallbackRequiredParts: RequiredSkeletonPart[],
+    observationProgress: number,
+  ): number | undefined {
+    if (
+      !keyframes?.length ||
+      referenceFrames.length < 2 ||
+      practiceFrames.length < 2
+    ) {
+      return undefined;
+    }
+
+    const scores = keyframes
+      .filter(
+        (keyframe) =>
+          keyframe.progress >= 0 &&
+          keyframe.progress <= Math.min(1, observationProgress),
+      )
+      .map((keyframe) => {
+        const radius =
+          keyframe.windowProgress ??
+          TEMPLATE_MATCHER_CONFIG.keyframeWindowProgress;
+        const referenceProgress =
+          keyframe.templateProgress?.[templateId] ?? keyframe.progress;
+        const referenceWindow = this.progressWindow(
+          referenceFrames,
+          referenceProgress,
+          radius,
+        );
+        const referenceSample = this.sampleWindow(referenceWindow);
+        const requiredParts = keyframe.requiredParts?.length
+          ? keyframe.requiredParts
+          : fallbackRequiredParts;
+        const practiceProgress =
+          keyframe.progress / Math.max(0.1, observationProgress);
+        const searchStart = Math.max(
+          0,
+          practiceProgress - TEMPLATE_MATCHER_CONFIG.keyframeSearchRadius,
+        );
+        const searchEnd = Math.min(
+          1,
+          practiceProgress + TEMPLATE_MATCHER_CONFIG.keyframeSearchRadius,
+        );
+        const candidateScores: number[] = [];
+        for (
+          let candidateProgress = searchStart;
+          candidateProgress <=
+          searchEnd + TEMPLATE_MATCHER_CONFIG.keyframeSearchStepProgress / 2;
+          candidateProgress +=
+            TEMPLATE_MATCHER_CONFIG.keyframeSearchStepProgress
+        ) {
+          const practiceWindow = this.progressWindow(
+            practiceFrames,
+            Math.min(1, candidateProgress),
+            radius,
+          );
+          candidateScores.push(
+            this.localTrajectorySimilarity(
+              referenceSample,
+              this.sampleWindow(practiceWindow),
+              requiredParts,
+            ),
+          );
+        }
+        return {
+          score: Math.max(0, ...candidateScores),
+          weight: keyframe.weight ?? 1,
+        };
+      });
+    const totalWeight = scores.reduce((sum, item) => sum + item.weight, 0);
+    if (totalWeight === 0) {
+      return undefined;
+    }
+    return (
+      scores.reduce((sum, item) => sum + item.score * item.weight, 0) /
+      totalWeight
+    );
+  }
+
+  private localTrajectorySimilarity(
+    referenceSample: SkeletonFrame[],
+    practiceSample: SkeletonFrame[],
+    requiredParts: RequiredSkeletonPart[],
+  ): number {
+    const pose = this.sequenceSimilarity(
+      referenceSample,
+      practiceSample,
+      (frame) => this.normalizedPose(frame),
+      TEMPLATE_MATCHER_CONFIG.poseDistanceScale,
+    );
+    const leftHand = this.sequenceSimilarity(
+      referenceSample,
+      practiceSample,
+      (frame) => this.normalizedHand(frame.leftHand),
+      TEMPLATE_MATCHER_CONFIG.handDistanceScale,
+    );
+    const rightHand = this.sequenceSimilarity(
+      referenceSample,
+      practiceSample,
+      (frame) => this.normalizedHand(frame.rightHand),
+      TEMPLATE_MATCHER_CONFIG.handDistanceScale,
+    );
+    const commonCount = Math.min(
+      referenceSample.length,
+      practiceSample.length,
+      TEMPLATE_MATCHER_CONFIG.keyframeComparisonFrameCount,
+    );
+    const trajectory = this.trajectorySimilarity(
+      this.sampleFrames(referenceSample, commonCount),
+      this.sampleFrames(practiceSample, commonCount),
+    );
+    const components: Array<[number | undefined, number, boolean]> = [
+      [pose, 0.45, requiredParts.includes('pose')],
+      [leftHand, 0.15, requiredParts.includes('left_hand')],
+      [rightHand, 0.15, requiredParts.includes('right_hand')],
+      [trajectory, 0.25, false],
+    ];
+    const available = components
+      .map(
+        ([value, weight, required]) =>
+          [value === undefined && required ? 0 : value, weight] as const,
+      )
+      .filter(
+        (component): component is readonly [number, number] =>
+          component[0] !== undefined && Number.isFinite(component[0]),
+      );
+    const totalWeight = available.reduce(
+      (sum, component) => sum + component[1],
+      0,
+    );
+    return totalWeight === 0
+      ? 0
+      : available.reduce(
+          (sum, component) => sum + component[0] * component[1],
+          0,
+        ) / totalWeight;
+  }
+
+  private progressWindow(
+    frames: SkeletonFrame[],
+    progress: number,
+    radius: number,
+  ): SkeletonFrame[] {
+    const lastIndex = frames.length - 1;
+    const start = Math.max(0, Math.floor((progress - radius) * lastIndex));
+    const end = Math.min(lastIndex, Math.ceil((progress + radius) * lastIndex));
+    return frames.slice(start, Math.max(start + 2, end + 1));
+  }
+
+  private sampleWindow(frames: SkeletonFrame[]): SkeletonFrame[] {
+    const count = Math.min(
+      frames.length,
+      TEMPLATE_MATCHER_CONFIG.keyframeComparisonFrameCount,
+    );
+    return this.sampleFrames(frames, Math.max(2, count));
   }
 
   private requiredVisibility(
@@ -520,47 +703,66 @@ export class SkeletonTemplateMatcherEngine {
   private weakestPart(
     scores: RealtimeScoreBreakdown,
     requiredParts: RequiredSkeletonPart[],
-  ): RequiredSkeletonPart | 'trajectory' | undefined {
+  ): RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory' | undefined {
     const candidates: Array<
-      [RequiredSkeletonPart | 'trajectory', number | undefined]
+      [
+        RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory',
+        number | undefined,
+      ]
     > = [
       ['pose', scores.pose],
       ['left_hand', scores.leftHand],
       ['right_hand', scores.rightHand],
       ['trajectory', scores.trajectory],
+      ['keyframe_trajectory', scores.keyframeTrajectory],
     ];
     return candidates
       .filter(
         (
           candidate,
-        ): candidate is [RequiredSkeletonPart | 'trajectory', number] =>
+        ): candidate is [
+          RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory',
+          number,
+        ] =>
           candidate[1] !== undefined &&
           (candidate[0] === 'trajectory' ||
+            candidate[0] === 'keyframe_trajectory' ||
             requiredParts.includes(candidate[0])),
       )
       .sort((left, right) => left[1] - right[1])[0]?.[0];
   }
 
   private gentleHint(
-    part: RequiredSkeletonPart | 'trajectory' | undefined,
+    part:
+      RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory' | undefined,
   ): string {
-    const hints: Record<RequiredSkeletonPart | 'trajectory', string> = {
+    const hints: Record<
+      RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory',
+      string
+    > = {
       pose: '动作基本完成，上半身位置再贴近示范一点，我们继续。',
       left_hand: '动作基本完成，下一步注意左手手型，我们继续。',
       right_hand: '动作基本完成，下一步注意右手手型，我们继续。',
       trajectory: '动作基本完成，下一步让移动路线更连贯一些。',
+      keyframe_trajectory: '动作基本完成，下一步注意关键姿势之间的移动路线。',
     };
     return part ? hints[part] : '动作基本完成，保持这个感觉，我们继续。';
   }
 
   private retryHint(
-    part: RequiredSkeletonPart | 'trajectory' | undefined,
+    part:
+      RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory' | undefined,
   ): string {
-    const hints: Record<RequiredSkeletonPart | 'trajectory', string> = {
+    const hints: Record<
+      RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory',
+      string
+    > = {
       pose: '先对齐肩膀、手肘和手腕的位置，我们放慢再做一次。',
       left_hand: '左手和示范差异较大，先看清左手手型，再做一次。',
       right_hand: '右手和示范差异较大，先看清右手手型，再做一次。',
       trajectory: '动作路线还没有完整完成，跟着慢速示范再做一次。',
+      keyframe_trajectory:
+        '关键姿势之间的移动路线差异较大，请跟着慢速示范再做一次。',
     };
     return part ? hints[part] : '这个动作还没有完整对齐，我们放慢再做一次。';
   }
@@ -595,7 +797,7 @@ export class SkeletonTemplateMatcherEngine {
     scores: RealtimeScoreBreakdown,
     startedAt: number,
     bestTemplateId?: string,
-    weakestPart?: RequiredSkeletonPart | 'trajectory',
+    weakestPart?: RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory',
   ): RealtimeJudgeResult {
     return {
       schemaVersion: 'realtime-decision-v1',

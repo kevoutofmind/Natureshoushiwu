@@ -1,0 +1,319 @@
+{
+  "schemaVersion": "cat-keyframe-positive-only-experiment-v1",
+  "generatedAt": "2026-07-25T12:45:34.019Z",
+  "dataRoot": "C:\\Users\\Stran\\Documents\\Codex\\2026-07-24\\geii\\github-sync\\data\\dances",
+  "trainingMode": "single-category-positive-only",
+  "danceId": "cat",
+  "referenceCount": 8,
+  "targetRecall": 0.8,
+  "keyframes": [
+    {
+      "keyframeId": "cat-paws-ready",
+      "label": "双手进入猫爪准备位置",
+      "progress": 0.17,
+      "windowProgress": 0.045,
+      "weight": 0.8,
+      "requiredParts": [
+        "pose"
+      ],
+      "templateProgress": {
+        "cat-template-02": 0.163934,
+        "cat-template-03": 0.174863,
+        "cat-template-04": 0.17,
+        "cat-template-05": 0.275132,
+        "cat-template-06": 0.167568,
+        "cat-template-07": 0.170213,
+        "cat-template-08": 0.189189,
+        "cat-template-09": 0.15847
+      }
+    },
+    {
+      "keyframeId": "cat-paws-open",
+      "label": "双手猫爪向外展开",
+      "progress": 0.28,
+      "windowProgress": 0.045,
+      "weight": 1,
+      "requiredParts": [
+        "pose"
+      ],
+      "templateProgress": {
+        "cat-template-02": 0.284153,
+        "cat-template-03": 0.295082,
+        "cat-template-04": 0.28,
+        "cat-template-05": 0.391534,
+        "cat-template-06": 0.264865,
+        "cat-template-07": 0.292553,
+        "cat-template-08": 0.302703,
+        "cat-template-09": 0.262295
+      }
+    },
+    {
+      "keyframeId": "cat-paws-cross",
+      "label": "双手交替交叉",
+      "progress": 0.39,
+      "windowProgress": 0.045,
+      "weight": 1,
+      "requiredParts": [
+        "pose"
+      ],
+      "templateProgress": {
+        "cat-template-02": 0.382514,
+        "cat-template-03": 0.409836,
+        "cat-template-04": 0.39,
+        "cat-template-05": 0.481481,
+        "cat-template-06": 0.372973,
+        "cat-template-07": 0.382979,
+        "cat-template-08": 0.475676,
+        "cat-template-09": 0.36612
+      }
+    },
+    {
+      "keyframeId": "cat-paws-up",
+      "label": "双手上举形成猫耳姿势",
+      "progress": 0.5,
+      "windowProgress": 0.045,
+      "weight": 1.2,
+      "requiredParts": [
+        "pose"
+      ],
+      "templateProgress": {
+        "cat-template-02": 0.568306,
+        "cat-template-03": 0.568306,
+        "cat-template-04": 0.5,
+        "cat-template-05": 0.566138,
+        "cat-template-06": 0.610811,
+        "cat-template-07": 0.569149,
+        "cat-template-08": 0.583784,
+        "cat-template-09": 0.497268
+      }
+    },
+    {
+      "keyframeId": "cat-fists-shoulder",
+      "label": "双拳回到肩部两侧",
+      "progress": 0.61,
+      "windowProgress": 0.045,
+      "weight": 1,
+      "requiredParts": [
+        "pose"
+      ],
+      "templateProgress": {
+        "cat-template-02": 0.677596,
+        "cat-template-03": 0.677596,
+        "cat-template-04": 0.61,
+        "cat-template-05": 0.661376,
+        "cat-template-06": 0.702703,
+        "cat-template-07": 0.670213,
+        "cat-template-08": 0.675676,
+        "cat-template-09": 0.693989
+      }
+    },
+    {
+      "keyframeId": "cat-fists-forward",
+      "label": "双拳向前完成节拍",
+      "progress": 0.72,
+      "windowProgress": 0.045,
+      "weight": 1.2,
+      "requiredParts": [
+        "pose"
+      ],
+      "templateProgress": {
+        "cat-template-02": 0.797814,
+        "cat-template-03": 0.775956,
+        "cat-template-04": 0.72,
+        "cat-template-05": 0.746032,
+        "cat-template-06": 0.783784,
+        "cat-template-07": 0.75,
+        "cat-template-08": 0.762162,
+        "cat-template-09": 0.770492
+      }
+    },
+    {
+      "keyframeId": "cat-hands-face",
+      "label": "双手靠近面部完成手势",
+      "progress": 0.83,
+      "windowProgress": 0.045,
+      "weight": 1,
+      "requiredParts": [
+        "pose"
+      ],
+      "templateProgress": {
+        "cat-template-02": 0.874317,
+        "cat-template-03": 0.885246,
+        "cat-template-04": 0.83,
+        "cat-template-05": 0.857143,
+        "cat-template-06": 0.875676,
+        "cat-template-07": 0.851064,
+        "cat-template-08": 0.859459,
+        "cat-template-09": 0.879781
+      }
+    },
+    {
+      "keyframeId": "cat-paws-finish",
+      "label": "双手猫爪收尾",
+      "progress": 0.94,
+      "windowProgress": 0.04,
+      "weight": 0.8,
+      "requiredParts": [
+        "pose"
+      ],
+      "templateProgress": {
+        "cat-template-02": 0.956284,
+        "cat-template-03": 0.967213,
+        "cat-template-04": 0.94,
+        "cat-template-05": 0.952381,
+        "cat-template-06": 0.967568,
+        "cat-template-07": 0.946809,
+        "cat-template-08": 0.956757,
+        "cat-template-09": 0.978142
+      }
+    }
+  ],
+  "baseline": {
+    "summary": {
+      "count": 8,
+      "visibleCount": 8,
+      "meanScore": 0.3518,
+      "minimumScore": 0.29,
+      "maximumScore": 0.386
+    },
+    "configuredPolicy": {
+      "threshold": 0.37,
+      "accepted": 3,
+      "total": 8,
+      "recall": 0.375,
+      "meetsTargetRecall": false
+    },
+    "recommendedPolicy": {
+      "threshold": 0.33,
+      "accepted": 7,
+      "total": 8,
+      "recall": 0.875,
+      "meetsTargetRecall": true
+    },
+    "cases": [
+      {
+        "sampleId": "cat-template-02",
+        "score": 0.341,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-03",
+        "score": 0.371,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-04",
+        "score": 0.29,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-05",
+        "score": 0.348,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-06",
+        "score": 0.386,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-07",
+        "score": 0.356,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-08",
+        "score": 0.336,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-09",
+        "score": 0.386,
+        "visible": true
+      }
+    ]
+  },
+  "keyframe": {
+    "summary": {
+      "count": 8,
+      "visibleCount": 8,
+      "meanScore": 0.3782,
+      "minimumScore": 0.328,
+      "maximumScore": 0.402
+    },
+    "configuredPolicy": {
+      "threshold": 0.37,
+      "accepted": 7,
+      "total": 8,
+      "recall": 0.875,
+      "meetsTargetRecall": true
+    },
+    "recommendedPolicy": {
+      "threshold": 0.37,
+      "accepted": 7,
+      "total": 8,
+      "recall": 0.875,
+      "meetsTargetRecall": true
+    },
+    "cases": [
+      {
+        "sampleId": "cat-template-02",
+        "score": 0.386,
+        "keyframeTrajectory": 0.46,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-03",
+        "score": 0.383,
+        "keyframeTrajectory": 0.453,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-04",
+        "score": 0.328,
+        "keyframeTrajectory": 0.382,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-05",
+        "score": 0.371,
+        "keyframeTrajectory": 0.398,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-06",
+        "score": 0.402,
+        "keyframeTrajectory": 0.421,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-07",
+        "score": 0.385,
+        "keyframeTrajectory": 0.434,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-08",
+        "score": 0.374,
+        "keyframeTrajectory": 0.417,
+        "visible": true
+      },
+      {
+        "sampleId": "cat-template-09",
+        "score": 0.397,
+        "keyframeTrajectory": 0.41,
+        "visible": true
+      }
+    ]
+  },
+  "delta": {
+    "meanScore": 0.0264,
+    "recallAtConfiguredThreshold": 0.5
+  },
+  "limitations": [
+    "Only cat references participate in training and validation.",
+    "Positive cases use leave-one-reference-out validation, not independent users.",
+    "Without negative samples this report cannot estimate false-accept rate or precision.",
+    "The eight cat progress anchors were visually annotated from the current choreography."
+  ]
+}

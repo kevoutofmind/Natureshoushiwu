@@ -28,7 +28,7 @@ const ffprobePath = resolve(projectRoot, "tools", "ffmpeg", "bin", "ffprobe.exe"
 const sampleFps = 10;
 const retryCount = 3;
 const expectedGroups = ["cat", "cloud", "fade", "fight", "indo", "no"];
-const explicitlySkipped = new Map([["cat (4).mp4", "用户指定跳过"]]);
+const explicitlySkipped = new Map([["cat (10).mp4", "保留为实时判例，不作为参考范本"]]);
 const limitArgument = process.argv.find((value) => value.startsWith("--limit="));
 const onlyArgument = process.argv.find((value) => value.startsWith("--only="));
 const onlySourceFile = onlyArgument?.slice("--only=".length);

@@ -1,7 +1,9 @@
 import type { ReferenceDanceDataset } from '@/features/video-stage/reference-dataset.types';
 import type {
+  PracticeObservation,
   TeachingAgentEventInput,
   TeachingAgentTurnResult,
+  RealtimeJudgeFeedback,
 } from './contracts/teaching-runtime';
 
 const apiBaseUrl =
@@ -64,6 +66,23 @@ export async function sendTeachingAgentEvent(
       eventId,
       expectedVersion,
       ...event,
+    }),
+  });
+}
+
+export async function decideRealtimeSimilarity(input: {
+  sessionId: string;
+  sampleId: string;
+  danceId: string;
+  motionId: string;
+  attemptIndex?: number;
+  observation: PracticeObservation;
+}): Promise<RealtimeJudgeFeedback> {
+  return request('/vlm-core/realtime/decide', {
+    method: 'POST',
+    body: JSON.stringify({
+      schemaVersion: 'realtime-judge-v1',
+      ...input,
     }),
   });
 }

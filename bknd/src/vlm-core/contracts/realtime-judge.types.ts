@@ -20,6 +20,29 @@ export interface SkeletonFrame {
 
 export type RequiredSkeletonPart = 'pose' | 'left_hand' | 'right_hand';
 
+/**
+ * A semantic pose anchor inside one motion unit. The matcher compares a short
+ * trajectory window around this progress point instead of relying only on
+ * uniformly sampled frames from the whole clip.
+ */
+export interface MotionKeyframeDefinition {
+  keyframeId: string;
+  label: string;
+  /** Relative position in the motion unit, from 0 to 1. */
+  progress: number;
+  /** Radius of the local trajectory window, expressed as unit progress. */
+  windowProgress?: number;
+  /** Relative contribution when several keyframes are combined. */
+  weight?: number;
+  /** Parts that must agree around this specific semantic pose. */
+  requiredParts?: RequiredSkeletonPart[];
+  /**
+   * Template-specific aligned positions. Offline annotation can transfer the
+   * semantic anchor to clips with different lead-in or ending durations.
+   */
+  templateProgress?: Record<string, number>;
+}
+
 export interface MotionReferenceTemplate {
   templateId: string;
   sourceVideoId: string;
@@ -36,6 +59,8 @@ export interface RealtimeEvaluationPolicy {
   minimumCompletionProgress?: number;
   /** Minimum observed skeleton duration used for a stable decision. */
   minimumObservationMs?: number;
+  /** Additional weight assigned to annotated keyframe trajectories. */
+  keyframeTrajectoryWeight?: number;
 }
 
 /**
@@ -53,6 +78,7 @@ export interface MotionTemplatePack {
   retrySpeech?: string;
   expectedDurationMs: number;
   requiredParts?: RequiredSkeletonPart[];
+  keyframes?: MotionKeyframeDefinition[];
   evaluationPolicy?: RealtimeEvaluationPolicy;
   templates: MotionReferenceTemplate[];
 }
@@ -90,6 +116,7 @@ export interface RealtimeScoreBreakdown {
   leftHand?: number;
   rightHand?: number;
   trajectory?: number;
+  keyframeTrajectory?: number;
   visibility: number;
 }
 
@@ -106,7 +133,7 @@ export interface RealtimeJudgeResult {
   shouldPause: boolean;
   confidence: number;
   bestTemplateId?: string;
-  weakestPart?: RequiredSkeletonPart | 'trajectory';
+  weakestPart?: RequiredSkeletonPart | 'trajectory' | 'keyframe_trajectory';
   scores: RealtimeScoreBreakdown;
   metadata: {
     engine: 'local-skeleton-template';
