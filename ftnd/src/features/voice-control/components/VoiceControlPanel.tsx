@@ -97,6 +97,8 @@ export default function VoiceControlPanel({
   const {
     isSupported,
     isListening,
+    isAwake,
+    wakeDebugTranscript,
     interimTranscript,
     error: recognitionError,
     startListening,
@@ -134,6 +136,11 @@ export default function VoiceControlPanel({
   ]);
 
   const hasTranscript = Boolean(interimTranscript || lastTranscript);
+  const showWakeDebug =
+    process.env.NODE_ENV !== "production" &&
+    isListening &&
+    !isAwake &&
+    Boolean(wakeDebugTranscript);
   const showStatusPanel =
     !isSupported ||
     Boolean(recognitionError) ||
@@ -165,7 +172,11 @@ export default function VoiceControlPanel({
             disabled={!isSupported || processing}
             className="voice-input-button"
           >
-            {isListening ? "正在持续监听" : "开启语音控制"}
+            {isListening
+              ? isAwake
+                ? "Lumi 正在听"
+                : "等待“早上好”唤醒"
+              : "开启语音控制"}
           </Button>
 
           {isListening && (
@@ -209,13 +220,21 @@ export default function VoiceControlPanel({
                 }}
               >
                 <Typography variant="caption" color="text.secondary">
-                  识别文字
+                  {isAwake ? "识别文字" : "“早上好”唤醒词"}
                 </Typography>
                 <Typography mt={0.5} fontWeight={750}>
-                  {interimTranscript ||
-                    lastTranscript ||
-                    "请直接说出指令，例如：慢一点"}
+                  {isListening && !isAwake && !processing
+                    ? "请先说“早上好”唤醒，再说出你的指令"
+                    : interimTranscript ||
+                      lastTranscript ||
+                      "Lumi 正在听，请说出你的指令"}
                 </Typography>
+                {showWakeDebug && (
+                  <Typography mt={0.75} variant="caption" color="warning.main">
+                    调试：浏览器刚才听到“{wakeDebugTranscript}”，但未匹配到
+                    “早上好”。
+                  </Typography>
+                )}
               </Box>
             )}
 
