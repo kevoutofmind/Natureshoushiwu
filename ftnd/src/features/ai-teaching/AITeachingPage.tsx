@@ -53,6 +53,7 @@ import {
   teachingMotionClipUrl,
   teachingMotionClipUrls,
 } from "./motion-video-catalog";
+import { buildNeutralFailurePrompt } from "./neutral-feedback-vocabulary";
 import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
@@ -647,6 +648,11 @@ export default function AITeachingPage({
     const visibleFrames = evaluationVisibleFrameCountRef.current;
     const score = Math.min(100, Math.round(58 + visibleFrames * 3.2));
     const passed = visibleFrames >= 8;
+    const neutralFailurePrompt = buildNeutralFailurePrompt({
+      danceId: activeDanceId,
+      actionIndex: targetIndex,
+      limit: 3,
+    });
     const result: LessonEvaluationResult = passed
       ? {
           passed: true,
@@ -658,7 +664,7 @@ export default function AITeachingPage({
           passed: false,
           score: Math.max(35, Math.min(score, 72)),
           headline: "这次还没过",
-          detail: "评估时没有捕捉到足够稳定的身体和双手画面。可以回到训练再看一轮，或先跳过。",
+          detail: `${neutralFailurePrompt}你可以回到训练再看一轮，或先跳过。`,
         };
 
     setEvaluationResult(result);
@@ -671,7 +677,7 @@ export default function AITeachingPage({
     } else {
       setLessonFlowStage("feedback");
     }
-  }, [completedThroughIndex, selectedMotionEnd]);
+  }, [activeDanceId, completedThroughIndex, selectedMotionEnd]);
   useEffect(() => {
     if (lessonFlowStage !== "countdown") return;
 
