@@ -4,6 +4,10 @@ import type {
   VoiceCommandParameters,
   VoiceCommandResponse,
 } from './contracts/voice-command.types';
+import {
+  containsVoiceKeyword,
+  isPlaybackRateStep,
+} from './voice-command-keywords';
 
 interface MatchedCommand {
   intent: SimpleVoiceCommandIntent;
@@ -31,6 +35,7 @@ function normalizeTranscript(transcript: string) {
   return transcript
     .trim()
     .toLowerCase()
+    .replace(/(\d)[,，](\d)/g, '$1.$2')
     .replace(/[，。！？、,!?]/g, '')
     .replace(/\s+/g, '');
 }
@@ -47,7 +52,16 @@ function extractSeconds(text: string, fallback: number) {
 
 function extractPlaybackRate(text: string) {
   const match = text.match(/(\d+(?:\.\d+)?)倍/);
-  return match ? Number(match[1]) : null;
+  if (match) return Number(match[1]);
+
+  const spokenRates: Array<[RegExp, number]> = [
+    [/(?:零|〇)点五倍|半倍|半速/, 0.5],
+    [/(?:零|〇)点七五倍|四分之三倍/, 0.75],
+    [/一点二五倍/, 1.25],
+    [/一点五倍/, 1.5],
+    [/(?:正常|标准|普通|原|一)倍?(?:速|速度)/, 1],
+  ];
+  return spokenRates.find(([pattern]) => pattern.test(text))?.[1] ?? null;
 }
 
 @Injectable()
@@ -72,7 +86,7 @@ export class VoiceControlService {
           },
           label: null,
           responseText:
-            '我没有完全听懂，但没关系。你可以直接告诉我“慢一点”“再教我一次”或者“我准备好了”。',
+            '没关系，你正在一点点找到感觉，我会一直陪着你。想调整时可以说“慢一点”“再来一遍”或“继续”。',
           executionStatus: 'not-dispatched',
         },
       };
@@ -99,16 +113,16 @@ export class VoiceControlService {
   }
 
   private matchSimpleCommand(text: string): MatchedCommand | null {
-    if (/(停止|结束|完成)(录制|录像)/.test(text)) {
+    if (containsVoiceKeyword(text, 'STOP_RECORDING')) {
       return this.command('STOP_RECORDING', '停止录制', '已识别：停止录制。');
     }
 
-    if (/(开始|启动|现在开始)(录制|录像)/.test(text)) {
+    if (containsVoiceKeyword(text, 'START_RECORDING')) {
       return this.command('START_RECORDING', '开始录制', '已识别：开始录制。');
     }
 
     if (
-      /(我)?(已经)?准备好了/.test(text) ||
+      containsVoiceKeyword(text, 'READY') ||
       /(直接|现在)(开始)?(练习|拆动作|教动作)/.test(text) ||
       /(不用|不想|可以不)(再)?看(完整|整段)?(示范|视频)/.test(text) ||
       /(跳过|略过)(完整)?(示范|预览)/.test(text)
@@ -125,7 +139,7 @@ export class VoiceControlService {
     const conversationalCommand = this.matchConversationalCommand(text);
     if (conversationalCommand) return conversationalCommand;
 
-    if (/(上个动作|上一个动作|前一个动作|倒退到上个|退回上个)/.test(text)) {
+    if (containsVoiceKeyword(text, 'PREVIOUS_ACTION')) {
       return this.command(
         'PREVIOUS_ACTION',
         '上一个动作',
@@ -134,8 +148,8 @@ export class VoiceControlService {
     }
 
     if (
-      /(这个动作|当前动作).*(再来|重做|重新)/.test(text) ||
-      /(再做一遍|再来一遍|重新做一遍|重复这个动作)/.test(text)
+      containsVoiceKeyword(text, 'REPEAT_ACTION') ||
+      /(这个动作|当前动作).*(再来|重做|重新)/.test(text)
     ) {
       return this.command(
         'REPEAT_ACTION',
@@ -144,7 +158,7 @@ export class VoiceControlService {
       );
     }
 
-    if (/(下个动作|下一个动作|跳到下个|进入下个)/.test(text)) {
+    if (containsVoiceKeyword(text, 'NEXT_ACTION')) {
       return this.command(
         'NEXT_ACTION',
         '下一个动作',
@@ -152,7 +166,7 @@ export class VoiceControlService {
       );
     }
 
-    if (/(从头开始|整支重来|重新开始教学)/.test(text)) {
+    if (containsVoiceKeyword(text, 'RESTART_LESSON') || text.includes('从头开始')) {
       return this.command(
         'RESTART_LESSON',
         '重新开始教学',
@@ -186,7 +200,7 @@ export class VoiceControlService {
 
     const playbackRate = extractPlaybackRate(text);
     if (playbackRate !== null) {
-      if (playbackRate < 0.25 || playbackRate > 2) return null;
+      if (!isPlaybackRateStep(playbackRate)) return null;
       return this.command(
         'SET_PLAYBACK_RATE',
         '设置倍速',
@@ -195,19 +209,19 @@ export class VoiceControlService {
       );
     }
 
-    if (/(慢一点|慢点|慢放|减速|太快)/.test(text)) {
-      return this.command('SLOW_DOWN', '慢一点', '已识别：降低播放速度。');
+    if (containsVoiceKeyword(text, 'SLOW_DOWN')) {
+      return this.command('SLOW_DOWN', '慢一点', '好的，我们降低一档，稳稳地跟上动作。');
     }
 
-    if (/(快一点|快点|加速|太慢)/.test(text)) {
-      return this.command('SPEED_UP', '快一点', '已识别：提高播放速度。');
+    if (containsVoiceKeyword(text, 'SPEED_UP')) {
+      return this.command('SPEED_UP', '快一点', '好的，我们提高一档，继续保持这个状态。');
     }
 
-    if (/(暂停|停一下|先停|等一下|别动)/.test(text) || text === '停') {
+    if (containsVoiceKeyword(text, 'PAUSE') || text === '停') {
       return this.command('PAUSE', '暂停', '已识别：暂停。');
     }
 
-    if (/(继续|接着|恢复播放|继续播放)/.test(text) || text === '播放') {
+    if (containsVoiceKeyword(text, 'RESUME') || text === '播放') {
       return this.command('RESUME', '继续', '已识别：继续播放。');
     }
 

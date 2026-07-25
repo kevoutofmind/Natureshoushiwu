@@ -10,6 +10,25 @@ interface RecordingVoiceControls {
   stop: () => void;
 }
 
+export const PLAYBACK_RATE_STEPS = [0.5, 0.75, 1, 1.25, 1.5] as const;
+
+export function adjacentPlaybackRate(
+  currentRate: number,
+  direction: 'slower' | 'faster',
+): number {
+  if (direction === 'slower') {
+    return (
+      [...PLAYBACK_RATE_STEPS]
+        .reverse()
+        .find((rate) => rate < currentRate) ?? PLAYBACK_RATE_STEPS[0]
+    );
+  }
+  return (
+    PLAYBACK_RATE_STEPS.find((rate) => rate > currentRate) ??
+    PLAYBACK_RATE_STEPS[PLAYBACK_RATE_STEPS.length - 1]
+  );
+}
+
 export async function executeVideoVoiceCommand(
   result: VoiceCommandResult,
   video: VideoVoiceTarget | null,
@@ -28,16 +47,16 @@ export async function executeVideoVoiceCommand(
       await video.play();
       return true;
     case "SLOW_DOWN":
-      video.playbackRate = 0.5;
+      video.playbackRate = adjacentPlaybackRate(video.playbackRate, 'slower');
       return true;
     case "SPEED_UP":
-      video.playbackRate = 1.25;
+      video.playbackRate = adjacentPlaybackRate(video.playbackRate, 'faster');
       return true;
     case "SET_PLAYBACK_RATE":
-      video.playbackRate = Math.max(
-        0.25,
-        Math.min(2, result.command.parameters.playbackRate ?? 1),
-      );
+      video.playbackRate =
+        PLAYBACK_RATE_STEPS.find(
+          (rate) => rate === result.command.parameters.playbackRate,
+        ) ?? 1;
       return true;
     default:
       return false;

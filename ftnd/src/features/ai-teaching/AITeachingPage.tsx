@@ -548,6 +548,7 @@ export default function AITeachingPage({
   };
 
   const handlePageVoiceResult = (result: VoiceCommandResult) => {
+    speak(result.responseText);
     const recordingHandled = executeRecordingVoiceCommand(result, {
       start: startRecordingFromVoice,
       stop: stopRecording,

@@ -61,9 +61,13 @@ describe("voice command execution", () => {
     const target = videoTarget();
 
     await executeVideoVoiceCommand(result("SLOW_DOWN"), target.video);
+    expect(target.video.playbackRate).toBe(0.75);
+    await executeVideoVoiceCommand(result('SLOW_DOWN'), target.video);
     expect(target.video.playbackRate).toBe(0.5);
     await executeVideoVoiceCommand(result("SPEED_UP"), target.video);
-    expect(target.video.playbackRate).toBe(1.25);
+    expect(target.video.playbackRate).toBe(0.75);
+    await executeVideoVoiceCommand(result('SPEED_UP'), target.video);
+    expect(target.video.playbackRate).toBe(1);
     await executeVideoVoiceCommand(
       result("SET_PLAYBACK_RATE", 1.5),
       target.video,
