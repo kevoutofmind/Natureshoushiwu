@@ -7,6 +7,7 @@ export default async function TeachingPage({
     danceId?: string | string[];
     selectedDanceId?: string | string[];
     danceTitle?: string | string[];
+    onboarding?: string | string[];
   }>;
 }) {
   const parameters = await searchParams;
@@ -19,12 +20,16 @@ export default async function TeachingPage({
   const danceTitle = Array.isArray(parameters.danceTitle)
     ? parameters.danceTitle[0]
     : parameters.danceTitle;
+  const onboarding = Array.isArray(parameters.onboarding)
+    ? parameters.onboarding[0]
+    : parameters.onboarding;
 
   return (
     <AITeachingPage
       danceId={danceId}
       selectedDanceId={selectedDanceId}
       danceTitle={danceTitle}
+      onboarding={onboarding === '1'}
     />
   );
 }

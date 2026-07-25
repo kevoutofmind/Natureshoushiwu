@@ -70,6 +70,7 @@ export default function PopularDancesPage() {
       danceId: dance.runtimeDanceId ?? dance.id,
       selectedDanceId: dance.id,
       danceTitle: dance.title,
+      onboarding: '1',
     });
     router.push(`/teaching?${parameters.toString()}`);
   };
