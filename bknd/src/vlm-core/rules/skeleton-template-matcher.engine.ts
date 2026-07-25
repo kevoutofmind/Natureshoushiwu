@@ -19,6 +19,7 @@ import {
 
 interface TemplateScore {
   templateId: string;
+  referenceRole?: MotionReferenceTemplate['referenceRole'];
   scores: RealtimeScoreBreakdown;
 }
 
@@ -80,15 +81,29 @@ export class SkeletonTemplateMatcherEngine {
       );
     }
 
+    const scoringProfile = pack.evaluationPolicy?.scoringProfile ?? 'balanced';
     const templateScores = pack.templates.map((template) =>
-      this.compareTemplate(template, input.observation, requiredParts),
+      this.compareTemplate(
+        template,
+        input.observation,
+        requiredParts,
+        scoringProfile,
+      ),
     );
-    const best = templateScores.sort(
+    const best = [...templateScores].sort(
       (left, right) => right.scores.overall - left.scores.overall,
     )[0];
-    const scores = best?.scores ?? { overall: 0, visibility };
+    const scores = {
+      ...(this.aggregateTemplateScores(pack, templateScores) ?? {
+        overall: 0,
+        visibility,
+      }),
+    };
     scores.visibility = visibility;
-    const weakestPart = this.weakestPart(scores, requiredParts);
+    const weakestPart =
+      scoringProfile === 'hands-position-temporal'
+        ? 'trajectory'
+        : this.weakestPart(scores, requiredParts);
 
     const minimumObservationMs =
       pack.evaluationPolicy?.minimumObservationMs ??
@@ -181,6 +196,7 @@ export class SkeletonTemplateMatcherEngine {
     template: MotionReferenceTemplate,
     observation: PracticeSkeletonObservation,
     requiredParts: RequiredSkeletonPart[],
+    scoringProfile: 'balanced' | 'hands-position-temporal',
   ): TemplateScore {
     const practiceFrames =
       template.mirrored === observation.mirrored
@@ -207,12 +223,15 @@ export class SkeletonTemplateMatcherEngine {
     const sampledPractice = this.sampleFrames(practiceFrames, sampleCount);
     const sampledReference = this.sampleFrames(referenceFrames, sampleCount);
 
-    const pose = this.sequenceSimilarity(
-      sampledReference,
-      sampledPractice,
-      (frame) => this.normalizedPose(frame),
-      TEMPLATE_MATCHER_CONFIG.poseDistanceScale,
-    );
+    const handsPositionOnly = scoringProfile === 'hands-position-temporal';
+    const pose = handsPositionOnly
+      ? undefined
+      : this.sequenceSimilarity(
+          sampledReference,
+          sampledPractice,
+          (frame) => this.normalizedPose(frame),
+          TEMPLATE_MATCHER_CONFIG.poseDistanceScale,
+        );
     const leftHand = this.sequenceSimilarity(
       sampledReference,
       sampledPractice,
@@ -225,17 +244,18 @@ export class SkeletonTemplateMatcherEngine {
       (frame) => this.normalizedHand(frame.rightHand),
       TEMPLATE_MATCHER_CONFIG.handDistanceScale,
     );
-    const trajectory = this.trajectorySimilarity(
-      sampledReference,
-      sampledPractice,
-    );
+    const trajectory = handsPositionOnly
+      ? this.handPositionTimelineSimilarity(sampledReference, sampledPractice)
+      : this.trajectorySimilarity(sampledReference, sampledPractice);
     const visibility = this.requiredVisibility(practiceFrames, requiredParts);
-    const components: Array<[number | undefined, number]> = [
-      [pose, 0.5],
-      [leftHand, requiredParts.includes('left_hand') ? 0.2 : 0.1],
-      [rightHand, requiredParts.includes('right_hand') ? 0.2 : 0.1],
-      [trajectory, 0.1],
-    ];
+    const components: Array<[number | undefined, number]> = handsPositionOnly
+      ? [[trajectory ?? 0, 1]]
+      : [
+          [pose, 0.5],
+          [leftHand, requiredParts.includes('left_hand') ? 0.2 : 0.1],
+          [rightHand, requiredParts.includes('right_hand') ? 0.2 : 0.1],
+          [trajectory, 0.1],
+        ];
     const available = components.filter(
       (component): component is [number, number] =>
         component[0] !== undefined && Number.isFinite(component[0]),
@@ -251,6 +271,7 @@ export class SkeletonTemplateMatcherEngine {
 
     return {
       templateId: template.templateId,
+      referenceRole: template.referenceRole,
       scores: {
         overall: this.round(overall),
         pose: this.optionalRound(pose),
@@ -260,6 +281,133 @@ export class SkeletonTemplateMatcherEngine {
         visibility: this.round(visibility),
       },
     };
+  }
+
+  /**
+   * The example shown in the UI remains the scoring anchor. The other nine
+   * same-class performers can rescue natural body-shape/style differences,
+   * but cannot outvote a badly timed or structurally different primary match.
+   *
+   * Packs created before referenceRole was introduced keep the original
+   * best-template behavior for backward compatibility.
+   */
+  private aggregateTemplateScores(
+    pack: MotionTemplatePack,
+    templateScores: TemplateScore[],
+  ): RealtimeScoreBreakdown | undefined {
+    const primary = templateScores
+      .filter((score) => score.referenceRole === 'primary')
+      .sort((left, right) => right.scores.overall - left.scores.overall)[0];
+    if (!primary) {
+      return [...templateScores].sort(
+        (left, right) => right.scores.overall - left.scores.overall,
+      )[0]?.scores;
+    }
+
+    const count = Math.max(
+      1,
+      Math.round(
+        pack.evaluationPolicy?.generalizationTemplateCount ??
+          TEMPLATE_MATCHER_CONFIG.generalizationTemplateCount,
+      ),
+    );
+    const generalization = templateScores
+      .filter((score) => score.referenceRole !== 'primary')
+      .sort((left, right) => right.scores.overall - left.scores.overall)
+      .slice(0, count);
+    if (generalization.length === 0) {
+      return primary.scores;
+    }
+
+    const primaryWeight = Math.min(
+      1,
+      Math.max(
+        0,
+        pack.evaluationPolicy?.primaryTemplateWeight ??
+          TEMPLATE_MATCHER_CONFIG.primaryTemplateWeight,
+      ),
+    );
+    const generalizationScores = this.averageScoreBreakdowns(
+      generalization.map((score) => score.scores),
+    );
+    return this.blendScoreBreakdowns(
+      primary.scores,
+      generalizationScores,
+      primaryWeight,
+    );
+  }
+
+  private averageScoreBreakdowns(
+    scores: RealtimeScoreBreakdown[],
+  ): RealtimeScoreBreakdown {
+    return {
+      overall: this.round(this.average(scores.map((score) => score.overall))),
+      pose: this.averageOptional(scores.map((score) => score.pose)),
+      leftHand: this.averageOptional(scores.map((score) => score.leftHand)),
+      rightHand: this.averageOptional(scores.map((score) => score.rightHand)),
+      trajectory: this.averageOptional(scores.map((score) => score.trajectory)),
+      visibility: this.round(
+        this.average(scores.map((score) => score.visibility)),
+      ),
+    };
+  }
+
+  private blendScoreBreakdowns(
+    primary: RealtimeScoreBreakdown,
+    generalization: RealtimeScoreBreakdown,
+    primaryWeight: number,
+  ): RealtimeScoreBreakdown {
+    return {
+      overall: this.round(
+        primary.overall * primaryWeight +
+          generalization.overall * (1 - primaryWeight),
+      ),
+      pose: this.blendOptional(
+        primary.pose,
+        generalization.pose,
+        primaryWeight,
+      ),
+      leftHand: this.blendOptional(
+        primary.leftHand,
+        generalization.leftHand,
+        primaryWeight,
+      ),
+      rightHand: this.blendOptional(
+        primary.rightHand,
+        generalization.rightHand,
+        primaryWeight,
+      ),
+      trajectory: this.blendOptional(
+        primary.trajectory,
+        generalization.trajectory,
+        primaryWeight,
+      ),
+      visibility: this.round(
+        primary.visibility * primaryWeight +
+          generalization.visibility * (1 - primaryWeight),
+      ),
+    };
+  }
+
+  private averageOptional(values: Array<number | undefined>) {
+    const available = values.filter(
+      (value): value is number => value !== undefined,
+    );
+    return available.length === 0
+      ? undefined
+      : this.round(this.average(available));
+  }
+
+  private blendOptional(
+    primary: number | undefined,
+    generalization: number | undefined,
+    primaryWeight: number,
+  ): number | undefined {
+    if (primary === undefined) return this.optionalRound(generalization);
+    if (generalization === undefined) return this.optionalRound(primary);
+    return this.round(
+      primary * primaryWeight + generalization * (1 - primaryWeight),
+    );
   }
 
   private sequenceSimilarity(
@@ -324,6 +472,69 @@ export class SkeletonTemplateMatcherEngine {
     return Math.exp(
       -distance / TEMPLATE_MATCHER_CONFIG.trajectoryDistanceScale,
     );
+  }
+
+  /**
+   * Index-aligned rather than DTW-aligned: a correct hand position at the
+   * wrong moment receives a real penalty. Coordinates are body-relative so
+   * different camera crops and performer proportions remain comparable.
+   */
+  private handPositionTimelineSimilarity(
+    referenceFrames: SkeletonFrame[],
+    practiceFrames: SkeletonFrame[],
+  ): number | undefined {
+    const frameCount = Math.min(referenceFrames.length, practiceFrames.length);
+    let distanceSum = 0;
+    let comparisonCount = 0;
+    for (let index = 0; index < frameCount; index += 1) {
+      const reference = this.normalizedHandAnchors(referenceFrames[index]);
+      const practice = this.normalizedHandAnchors(practiceFrames[index]);
+      if (!reference || !practice) continue;
+      for (let handIndex = 0; handIndex < 2; handIndex += 1) {
+        const expected = reference[handIndex];
+        const observed = practice[handIndex];
+        if (expected && observed) {
+          distanceSum += this.distance(expected, observed);
+          comparisonCount += 1;
+        } else if (expected || observed) {
+          distanceSum += 1.25;
+          comparisonCount += 1;
+        }
+      }
+    }
+    if (comparisonCount < Math.max(2, Math.floor(frameCount * 0.5))) {
+      return undefined;
+    }
+    return Math.exp(
+      -(distanceSum / comparisonCount) /
+        TEMPLATE_MATCHER_CONFIG.handPositionDistanceScale,
+    );
+  }
+
+  private normalizedHandAnchors(
+    frame: SkeletonFrame,
+  ): [NormalizedPoint | undefined, NormalizedPoint | undefined] | undefined {
+    const leftShoulder = frame.pose[11];
+    const rightShoulder = frame.pose[12];
+    if (!leftShoulder || !rightShoulder) return undefined;
+    const scale = this.distance(leftShoulder, rightShoulder);
+    if (scale < 0.01) return undefined;
+    const center = {
+      x: (leftShoulder.x + rightShoulder.x) / 2,
+      y: (leftShoulder.y + rightShoulder.y) / 2,
+      z: ((leftShoulder.z ?? 0) + (rightShoulder.z ?? 0)) / 2,
+    };
+    const normalize = (
+      point: SkeletonLandmark | undefined,
+    ): NormalizedPoint | undefined =>
+      point
+        ? {
+            x: (point.x - center.x) / scale,
+            y: (point.y - center.y) / scale,
+            z: ((point.z ?? 0) - center.z) / scale,
+          }
+        : undefined;
+    return [normalize(frame.leftHand?.[0]), normalize(frame.rightHand?.[0])];
   }
 
   private wristTrajectory(

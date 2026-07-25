@@ -1,4 +1,4 @@
-export const TEMPLATE_MATCHER_VERSION = 'template-matcher-v1.0.0';
+export const TEMPLATE_MATCHER_VERSION = 'template-matcher-v1.1.0';
 
 export const TEMPLATE_MATCHER_CONFIG = {
   acceptThreshold: 0.78,
@@ -13,4 +13,7 @@ export const TEMPLATE_MATCHER_CONFIG = {
   poseDistanceScale: 0.55,
   handDistanceScale: 0.48,
   trajectoryDistanceScale: 0.8,
+  handPositionDistanceScale: 0.85,
+  primaryTemplateWeight: 0.7,
+  generalizationTemplateCount: 3,
 } as const;

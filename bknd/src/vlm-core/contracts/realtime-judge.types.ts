@@ -24,6 +24,11 @@ export interface MotionReferenceTemplate {
   templateId: string;
   sourceVideoId: string;
   mirrored: boolean;
+  /**
+   * The primary template is the video shown to the learner. Other templates
+   * only broaden acceptable performer/body-shape variation.
+   */
+  referenceRole?: 'primary' | 'generalization';
   frames: SkeletonFrame[];
 }
 
@@ -36,6 +41,18 @@ export interface RealtimeEvaluationPolicy {
   minimumCompletionProgress?: number;
   /** Minimum observed skeleton duration used for a stable decision. */
   minimumObservationMs?: number;
+  /**
+   * Weight reserved for the web-visible primary example. The remaining
+   * weight is shared by the best same-class generalization templates.
+   */
+  primaryTemplateWeight?: number;
+  /** Number of strongest same-class generalization templates to blend. */
+  generalizationTemplateCount?: number;
+  /**
+   * fade uses hand position with index-aligned timing and deliberately ignores
+   * the frozen body pose and finger-shape similarity.
+   */
+  scoringProfile?: 'balanced' | 'hands-position-temporal';
 }
 
 /**

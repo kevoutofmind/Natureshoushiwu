@@ -201,7 +201,13 @@ function assembleDataset(
     const motionId = `motion-${String(index + 1).padStart(2, "0")}`;
     const templates = references
       .map((reference) =>
-        createMotionTemplate(reference, startMs, endMs, primary.durationMs),
+        createMotionTemplate(
+          reference,
+          startMs,
+          endMs,
+          primary.durationMs,
+          reference.referenceId === primary.referenceId,
+        ),
       )
       .filter((template) => template.frames.length >= 5);
     if (templates.length === 0) {
@@ -229,6 +235,8 @@ function assembleDataset(
         acceptWithHintThreshold: 0.4,
         minimumCompletionProgress: 0.62,
         minimumObservationMs: 650,
+        primaryTemplateWeight: 0.7,
+        generalizationTemplateCount: 3,
       },
       templates,
     };
@@ -347,6 +355,7 @@ function createMotionTemplate(
   primaryStartMs: number,
   primaryEndMs: number,
   primaryDurationMs: number,
+  isPrimary: boolean,
 ) {
   const startMs = (primaryStartMs / primaryDurationMs) * reference.durationMs;
   const endMs = (primaryEndMs / primaryDurationMs) * reference.durationMs;
@@ -365,6 +374,7 @@ function createMotionTemplate(
     templateId: `${reference.referenceId}-${Math.round(primaryStartMs)}-${Math.round(primaryEndMs)}`,
     sourceVideoId: reference.referenceId,
     mirrored: reference.mirrored,
+    referenceRole: isPrimary ? ("primary" as const) : ("generalization" as const),
     frames,
   };
 }

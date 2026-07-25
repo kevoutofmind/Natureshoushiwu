@@ -1,7 +1,7 @@
-import type { SkeletonSnapshot, VisionLandmark } from './vision-types';
+import type { SkeletonSnapshot, VisionLandmark } from "./vision-types";
 
 export interface ReferenceVideoManifest {
-  schemaVersion: 'reference-video-manifest-v1';
+  schemaVersion: "reference-video-manifest-v1";
   danceId: string;
   title: string;
   primaryReferenceId: string;
@@ -26,7 +26,7 @@ export interface MotionTemplateFrame {
 }
 
 export interface MotionTemplatePack {
-  schemaVersion: 'motion-template-pack-v1';
+  schemaVersion: "motion-template-pack-v1";
   danceId: string;
   motionId: string;
   motionName: string;
@@ -35,17 +35,21 @@ export interface MotionTemplatePack {
   hintSpeech: string;
   retrySpeech: string;
   expectedDurationMs: number;
-  requiredParts: Array<'pose' | 'left_hand' | 'right_hand'>;
+  requiredParts: Array<"pose" | "left_hand" | "right_hand">;
   evaluationPolicy: {
     acceptThreshold: number;
     acceptWithHintThreshold: number;
     minimumCompletionProgress: number;
     minimumObservationMs: number;
+    primaryTemplateWeight?: number;
+    generalizationTemplateCount?: number;
+    scoringProfile?: "balanced" | "hands-position-temporal";
   };
   templates: Array<{
     templateId: string;
     sourceVideoId: string;
     mirrored: boolean;
+    referenceRole?: "primary" | "generalization";
     frames: MotionTemplateFrame[];
   }>;
 }
@@ -60,7 +64,7 @@ export interface MotionSemanticBreakdown {
 }
 
 export interface TeachingLessonPlan {
-  schemaVersion: 'teaching-lesson-plan-v1';
+  schemaVersion: "teaching-lesson-plan-v1";
   danceId: string;
   title: string;
   referenceVideoId: string;
@@ -82,7 +86,7 @@ export interface TeachingLessonPlan {
 }
 
 export interface ReferenceDanceDataset {
-  schemaVersion: 'reference-dance-dataset-v1';
+  schemaVersion: "reference-dance-dataset-v1";
   danceId: string;
   title: string;
   referenceVideoUrl: string;
@@ -91,7 +95,7 @@ export interface ReferenceDanceDataset {
   lesson: TeachingLessonPlan;
   templatePacks: MotionTemplatePack[];
   extraction: {
-    engine: 'mediapipe-holistic-landmarker';
+    engine: "mediapipe-holistic-landmarker";
     sampleFps: number;
     detectedFrameCount: number;
     motionCount: number;
@@ -108,7 +112,7 @@ export interface ExtractedReference {
 }
 
 export interface DatasetBuildProgress {
-  stage: 'loading-model' | 'extracting' | 'building-templates' | 'completed';
+  stage: "loading-model" | "extracting" | "building-templates" | "completed";
   completedVideos: number;
   totalVideos: number;
   message: string;

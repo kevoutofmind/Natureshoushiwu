@@ -16,6 +16,7 @@ import type {
   DatasetBuildProgress,
   ReferenceDanceDataset,
 } from "@/features/video-stage/reference-dataset.types";
+import { buildPreparedReferenceDataset } from "@/features/video-stage/prepared-skeleton-dataset";
 import type { SkeletonSnapshot } from "@/features/video-stage/vision-types";
 import type { VlmTeachingFeedback } from "../contracts/vlm-teaching-feedback";
 import type {
@@ -256,23 +257,39 @@ export function useTeachingRuntime({
       message: "正在从 5 个参考视频生成本地骨骼模板…",
     });
     try {
-      const manifest = await loadReferenceManifest(danceId);
-      const primary =
-        manifest.references.find(
-          (reference) => reference.referenceId === manifest.primaryReferenceId,
-        ) ?? manifest.references[0];
-      setReferenceVideoUrl(primary.videoUrl);
-      let dataset = await getReferenceDataset(danceId);
-      if (dataset) {
-        setBuildProgress({
-          stage: "completed",
-          completedVideos: dataset.sourceVideoCount,
-          totalVideos: dataset.sourceVideoCount,
-          message: `已复用 ${dataset.sourceVideoCount} 条参考视频生成的本地模板。`,
-        });
-      } else {
-        dataset = await buildReferenceDataset(manifest, setBuildProgress);
+      setRuntimeStatus({
+        state: "preparing-dataset",
+        message: "正在读取当前类别的 10 个骨架素材，并建立主示例与泛化模板。",
+      });
+      let dataset: ReferenceDanceDataset;
+      try {
+        dataset = await buildPreparedReferenceDataset(
+          danceId,
+          setBuildProgress,
+        );
+        setReferenceVideoUrl(dataset.referenceVideoUrl);
         await registerReferenceDataset(dataset);
+      } catch {
+        const manifest = await loadReferenceManifest(danceId);
+        const primary =
+          manifest.references.find(
+            (reference) =>
+              reference.referenceId === manifest.primaryReferenceId,
+          ) ?? manifest.references[0];
+        setReferenceVideoUrl(primary.videoUrl);
+        const existingDataset = await getReferenceDataset(danceId);
+        if (existingDataset) {
+          dataset = existingDataset;
+          setBuildProgress({
+            stage: "completed",
+            completedVideos: dataset.sourceVideoCount,
+            totalVideos: dataset.sourceVideoCount,
+            message: `已复用 ${dataset.sourceVideoCount} 条参考视频生成的本地模板。`,
+          });
+        } else {
+          dataset = await buildReferenceDataset(manifest, setBuildProgress);
+          await registerReferenceDataset(dataset);
+        }
       }
       datasetRef.current = dataset;
       setLessonMotions(

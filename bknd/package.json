@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build",
     "data:import": "node scripts/import-reference-datasets.mjs",
+    "data:evaluate": "ts-node scripts/evaluate-skeleton-datasets.ts",
     "data:validate": "ts-node scripts/validate-reference-datasets.ts",
     "dance-catalog:import": "node scripts/import-dance-catalog.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

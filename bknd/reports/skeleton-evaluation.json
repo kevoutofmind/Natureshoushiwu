@@ -1,0 +1,4909 @@
+{
+  "schemaVersion": "skeleton-evaluation-report-v1",
+  "generatedAt": "2026-07-25T15:41:14.561Z",
+  "validation": {
+    "design": "stratified ten-fold leave-one-out; all six classes use nine training videos and one held-out test video in every fold",
+    "positiveTest": "for fold N, hold out sequence N from every class and build every class bank from its other nine videos",
+    "negativeControl": "the five other held-out videos in the same fold are negative controls; no held-out video enters any template bank",
+    "thresholdSelection": "select a separate threshold for each class, maximizing true-positive rate subject to at most 5% cross-class false accepts"
+  },
+  "methods": {
+    "pointDtw": {
+      "matcher": "template-matcher-v1.1.0",
+      "normalization": "shoulder-centered and shoulder-width-scaled pose; wrist-centered and palm-scaled hands",
+      "temporalAlignment": "dynamic time warping over 16 sampled frames",
+      "scoreComponents": {
+        "pose": 0.5,
+        "leftHandWhenAvailable": 0.1,
+        "rightHandWhenAvailable": 0.1,
+        "wristTrajectory": 0.1
+      },
+      "classSpecificProfile": {
+        "fade": "body pose ignored; 100% body-relative left/right hand position with index-aligned timing"
+      }
+    },
+    "relationalDtw": {
+      "matcher": "relational-dtw-v1",
+      "normalization": "shoulder-centered, shoulder-width-scaled, and shoulder-axis-aligned coordinates",
+      "relations": [
+        "upper-body joint angles",
+        "normalized inter-joint distances",
+        "body-relative arm and wrist directions",
+        "finger joint angles and fingertip distances"
+      ],
+      "temporalAlignment": "dynamic time warping over 24 sampled frames"
+    },
+    "temporalRelationalDtw": {
+      "matcher": "temporal-relational-dtw-v2",
+      "spatialTolerance": "Huber-clipped relational distance with a wider acceptance scale",
+      "temporalAlignment": [
+        "Sakoe-Chiba phase window of 12%",
+        "penalty for horizontal and vertical time warps",
+        "phase-aligned relation-velocity comparison",
+        "soft duration-ratio penalty"
+      ],
+      "scoreWeights": {
+        "spatialRelations": 0.4,
+        "motionTiming": 0.6
+      },
+      "templateAggregation": "mean of the three closest same-class templates to prevent one accidental match from passing"
+    }
+  },
+  "datasetQuality": [
+    {
+      "datasetId": "cat",
+      "videos": 10,
+      "frames": 1835,
+      "durationSeconds": 183.877,
+      "meanDurationSeconds": 18.3877,
+      "poseCoverage": 1,
+      "leftHandCoverage": 0.6371,
+      "rightHandCoverage": 0.5095,
+      "bothHandsCoverage": 0.3956
+    },
+    {
+      "datasetId": "cloud",
+      "videos": 10,
+      "frames": 1736,
+      "durationSeconds": 173.737,
+      "meanDurationSeconds": 17.3737,
+      "poseCoverage": 1,
+      "leftHandCoverage": 0.5346,
+      "rightHandCoverage": 0.4885,
+      "bothHandsCoverage": 0.3266
+    },
+    {
+      "datasetId": "fade",
+      "videos": 10,
+      "frames": 1033,
+      "durationSeconds": 102.999,
+      "meanDurationSeconds": 10.2999,
+      "poseCoverage": 1,
+      "leftHandCoverage": 0.5566,
+      "rightHandCoverage": 0.697,
+      "bothHandsCoverage": 0.4618
+    },
+    {
+      "datasetId": "fight",
+      "videos": 10,
+      "frames": 1127,
+      "durationSeconds": 112.632,
+      "meanDurationSeconds": 11.2632,
+      "poseCoverage": 1,
+      "leftHandCoverage": 0.7569,
+      "rightHandCoverage": 0.4933,
+      "bothHandsCoverage": 0.4135
+    },
+    {
+      "datasetId": "indo",
+      "videos": 10,
+      "frames": 962,
+      "durationSeconds": 95.833,
+      "meanDurationSeconds": 9.5833,
+      "poseCoverage": 1,
+      "leftHandCoverage": 0.815,
+      "rightHandCoverage": 0.5738,
+      "bothHandsCoverage": 0.5031
+    },
+    {
+      "datasetId": "no",
+      "videos": 10,
+      "frames": 1580,
+      "durationSeconds": 159.567,
+      "meanDurationSeconds": 15.9567,
+      "poseCoverage": 1,
+      "leftHandCoverage": 0.4525,
+      "rightHandCoverage": 0.3646,
+      "bothHandsCoverage": 0.2139
+    }
+  ],
+  "benchmarks": {
+    "pointDtw": {
+      "top1": {
+        "correct": 25,
+        "total": 60,
+        "accuracy": 0.4167,
+        "perClass": [
+          {
+            "datasetId": "cat",
+            "correct": 1,
+            "total": 10,
+            "accuracy": 0.1,
+            "errors": [
+              {
+                "sampleId": "cat (1)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.261,
+                "strongestImpostorScore": 0.339,
+                "margin": -0.078
+              },
+              {
+                "sampleId": "cat (2)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.259,
+                "strongestImpostorScore": 0.305,
+                "margin": -0.046
+              },
+              {
+                "sampleId": "cat (3)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.268,
+                "strongestImpostorScore": 0.286,
+                "margin": -0.018
+              },
+              {
+                "sampleId": "cat (4)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.223,
+                "strongestImpostorScore": 0.26,
+                "margin": -0.037
+              },
+              {
+                "sampleId": "cat (5)",
+                "predictedLabel": "no",
+                "genuineScore": 0.251,
+                "strongestImpostorScore": 0.278,
+                "margin": -0.027
+              },
+              {
+                "sampleId": "cat (7)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.277,
+                "strongestImpostorScore": 0.298,
+                "margin": -0.021
+              },
+              {
+                "sampleId": "cat (8)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.274,
+                "strongestImpostorScore": 0.3,
+                "margin": -0.026
+              },
+              {
+                "sampleId": "cat (9)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.258,
+                "strongestImpostorScore": 0.294,
+                "margin": -0.036
+              },
+              {
+                "sampleId": "cat (10)",
+                "predictedLabel": "no",
+                "genuineScore": 0.155,
+                "strongestImpostorScore": 0.197,
+                "margin": -0.042
+              }
+            ]
+          },
+          {
+            "datasetId": "cloud",
+            "correct": 3,
+            "total": 10,
+            "accuracy": 0.3,
+            "errors": [
+              {
+                "sampleId": "cloud (1)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.295,
+                "strongestImpostorScore": 0.35,
+                "margin": -0.055
+              },
+              {
+                "sampleId": "cloud (4)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.256,
+                "strongestImpostorScore": 0.266,
+                "margin": -0.01
+              },
+              {
+                "sampleId": "cloud (5)",
+                "predictedLabel": "no",
+                "genuineScore": 0.209,
+                "strongestImpostorScore": 0.254,
+                "margin": -0.045
+              },
+              {
+                "sampleId": "cloud (6)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.27,
+                "strongestImpostorScore": 0.305,
+                "margin": -0.035
+              },
+              {
+                "sampleId": "cloud (7)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.24,
+                "strongestImpostorScore": 0.327,
+                "margin": -0.087
+              },
+              {
+                "sampleId": "cloud (8)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.265,
+                "strongestImpostorScore": 0.279,
+                "margin": -0.014
+              },
+              {
+                "sampleId": "cloud (9)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.278,
+                "strongestImpostorScore": 0.296,
+                "margin": -0.018
+              }
+            ]
+          },
+          {
+            "datasetId": "fade",
+            "correct": 5,
+            "total": 10,
+            "accuracy": 0.5,
+            "errors": [
+              {
+                "sampleId": "fade (1)",
+                "predictedLabel": "indo",
+                "genuineScore": 0,
+                "strongestImpostorScore": 0.244,
+                "margin": -0.244
+              },
+              {
+                "sampleId": "fade (2)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.191,
+                "strongestImpostorScore": 0.293,
+                "margin": -0.102
+              },
+              {
+                "sampleId": "fade (6)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.178,
+                "strongestImpostorScore": 0.34,
+                "margin": -0.162
+              },
+              {
+                "sampleId": "fade (7)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.25,
+                "strongestImpostorScore": 0.32,
+                "margin": -0.07
+              },
+              {
+                "sampleId": "fade (8)",
+                "predictedLabel": "indo",
+                "genuineScore": 0,
+                "strongestImpostorScore": 0.316,
+                "margin": -0.316
+              }
+            ]
+          },
+          {
+            "datasetId": "fight",
+            "correct": 6,
+            "total": 10,
+            "accuracy": 0.6,
+            "errors": [
+              {
+                "sampleId": "fight (1)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.311,
+                "strongestImpostorScore": 0.412,
+                "margin": -0.101
+              },
+              {
+                "sampleId": "fight (2)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.326,
+                "strongestImpostorScore": 0.36,
+                "margin": -0.034
+              },
+              {
+                "sampleId": "fight (7)",
+                "predictedLabel": "cat",
+                "genuineScore": 0.202,
+                "strongestImpostorScore": 0.208,
+                "margin": -0.006
+              },
+              {
+                "sampleId": "fight (9)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.228,
+                "strongestImpostorScore": 0.253,
+                "margin": -0.025
+              }
+            ]
+          },
+          {
+            "datasetId": "indo",
+            "correct": 7,
+            "total": 10,
+            "accuracy": 0.7,
+            "errors": [
+              {
+                "sampleId": "indo (2)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.318,
+                "strongestImpostorScore": 0.344,
+                "margin": -0.026
+              },
+              {
+                "sampleId": "indo (3)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.287,
+                "strongestImpostorScore": 0.296,
+                "margin": -0.009
+              },
+              {
+                "sampleId": "indo (4)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.326,
+                "strongestImpostorScore": 0.384,
+                "margin": -0.058
+              }
+            ]
+          },
+          {
+            "datasetId": "no",
+            "correct": 3,
+            "total": 10,
+            "accuracy": 0.3,
+            "errors": [
+              {
+                "sampleId": "no (3)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.199,
+                "strongestImpostorScore": 0.27,
+                "margin": -0.071
+              },
+              {
+                "sampleId": "no (4)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.262,
+                "strongestImpostorScore": 0.298,
+                "margin": -0.036
+              },
+              {
+                "sampleId": "no (6)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.278,
+                "strongestImpostorScore": 0.281,
+                "margin": -0.003
+              },
+              {
+                "sampleId": "no (7)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.218,
+                "strongestImpostorScore": 0.356,
+                "margin": -0.138
+              },
+              {
+                "sampleId": "no (8)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.257,
+                "strongestImpostorScore": 0.319,
+                "margin": -0.062
+              },
+              {
+                "sampleId": "no (9)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.263,
+                "strongestImpostorScore": 0.292,
+                "margin": -0.029
+              },
+              {
+                "sampleId": "no (10)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.229,
+                "strongestImpostorScore": 0.29,
+                "margin": -0.061
+              }
+            ]
+          }
+        ],
+        "confusionMatrix": {
+          "cat": {
+            "cat": 1,
+            "cloud": 0,
+            "fade": 1,
+            "fight": 2,
+            "indo": 4,
+            "no": 2
+          },
+          "cloud": {
+            "cat": 0,
+            "cloud": 3,
+            "fade": 1,
+            "fight": 1,
+            "indo": 4,
+            "no": 1
+          },
+          "fade": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 5,
+            "fight": 0,
+            "indo": 5,
+            "no": 0
+          },
+          "fight": {
+            "cat": 1,
+            "cloud": 0,
+            "fade": 0,
+            "fight": 6,
+            "indo": 3,
+            "no": 0
+          },
+          "indo": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 0,
+            "fight": 3,
+            "indo": 7,
+            "no": 0
+          },
+          "no": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 0,
+            "fight": 4,
+            "indo": 3,
+            "no": 3
+          }
+        }
+      },
+      "macro": {
+        "rocAuc": 0.7403,
+        "equalErrorRate": 0.3017,
+        "truePositiveRateAtFivePercentFpr": 0.1833,
+        "observedFalsePositiveRate": 0.0333
+      },
+      "perClass": [
+        {
+          "datasetId": "cat",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.616,
+          "equalErrorRate": 0.4,
+          "recommendedThreshold": {
+            "threshold": 0.292,
+            "truePositiveRate": 0.1,
+            "falseNegativeRate": 0.9,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.53,
+            "precision": 0.3333,
+            "positiveAccepted": 1,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.155,
+            "p25": 0.2528,
+            "median": 0.26,
+            "mean": 0.252,
+            "p75": 0.2725,
+            "max": 0.294
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0,
+            "p25": 0.2223,
+            "median": 0.245,
+            "mean": 0.232,
+            "p75": 0.2665,
+            "max": 0.311
+          },
+          "positiveScores": [
+            0.261,
+            0.259,
+            0.268,
+            0.223,
+            0.251,
+            0.294,
+            0.277,
+            0.274,
+            0.258,
+            0.155
+          ],
+          "negativeScores": [
+            0.265,
+            0.16,
+            0.311,
+            0.302,
+            0.262,
+            0.229,
+            0.254,
+            0.267,
+            0.233,
+            0.24,
+            0.24,
+            0.128,
+            0.234,
+            0.211,
+            0.202,
+            0.234,
+            0,
+            0.245,
+            0.282,
+            0.29,
+            0.21,
+            0,
+            0.26,
+            0.247,
+            0.161,
+            0.242,
+            0.272,
+            0.245,
+            0.286,
+            0.251,
+            0.259,
+            0.288,
+            0.208,
+            0.279,
+            0.282,
+            0.236,
+            0.262,
+            0.244,
+            0.222,
+            0.259,
+            0.264,
+            0.136,
+            0.223,
+            0.247,
+            0.284,
+            0.213,
+            0.15,
+            0.226,
+            0.289,
+            0.267
+          ]
+        },
+        {
+          "datasetId": "cloud",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.762,
+          "equalErrorRate": 0.3,
+          "recommendedThreshold": {
+            "threshold": 0.2875,
+            "truePositiveRate": 0.2,
+            "falseNegativeRate": 0.8,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.58,
+            "precision": 0.5,
+            "positiveAccepted": 2,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.209,
+            "p25": 0.2582,
+            "median": 0.268,
+            "mean": 0.2655,
+            "p75": 0.2772,
+            "max": 0.301
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0,
+            "p25": 0.215,
+            "median": 0.244,
+            "mean": 0.2264,
+            "p75": 0.2578,
+            "max": 0.349
+          },
+          "positiveScores": [
+            0.295,
+            0.275,
+            0.301,
+            0.256,
+            0.209,
+            0.27,
+            0.24,
+            0.265,
+            0.278,
+            0.266
+          ],
+          "negativeScores": [
+            0.252,
+            0.189,
+            0.349,
+            0.31,
+            0.258,
+            0.27,
+            0.226,
+            0.269,
+            0.224,
+            0.246,
+            0.243,
+            0.108,
+            0.212,
+            0.248,
+            0.224,
+            0.253,
+            0,
+            0.235,
+            0.267,
+            0.27,
+            0.252,
+            0,
+            0.271,
+            0.273,
+            0.187,
+            0.276,
+            0.229,
+            0.236,
+            0.262,
+            0.253,
+            0.261,
+            0.219,
+            0.193,
+            0.28,
+            0.237,
+            0.254,
+            0.215,
+            0.215,
+            0.215,
+            0.245,
+            0.246,
+            0.118,
+            0.204,
+            0.229,
+            0.257,
+            0.161,
+            0.136,
+            0.257,
+            0.251,
+            0.235
+          ]
+        },
+        {
+          "datasetId": "fade",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.693,
+          "equalErrorRate": 0.4,
+          "recommendedThreshold": {
+            "threshold": 1.001,
+            "truePositiveRate": 0,
+            "falseNegativeRate": 1,
+            "falsePositiveRate": 0,
+            "trueNegativeRate": 1,
+            "balancedAccuracy": 0.5,
+            "precision": 0,
+            "positiveAccepted": 0,
+            "positiveTotal": 10,
+            "negativeAccepted": 0,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0,
+            "p25": 0.1812,
+            "median": 0.253,
+            "mean": 0.2058,
+            "p75": 0.2705,
+            "max": 0.332
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0,
+            "p25": 0,
+            "median": 0.188,
+            "mean": 0.1293,
+            "p75": 0.2112,
+            "max": 0.368
+          },
+          "positiveScores": [
+            0,
+            0.191,
+            0.311,
+            0.271,
+            0.332,
+            0.178,
+            0.25,
+            0,
+            0.256,
+            0.269
+          ],
+          "negativeScores": [
+            0.339,
+            0.35,
+            0.325,
+            0.368,
+            0,
+            0.206,
+            0,
+            0.197,
+            0.191,
+            0.177,
+            0.192,
+            0,
+            0.193,
+            0,
+            0,
+            0.189,
+            0.205,
+            0.186,
+            0.218,
+            0.187,
+            0,
+            0,
+            0.212,
+            0.214,
+            0,
+            0.198,
+            0.23,
+            0.183,
+            0.214,
+            0,
+            0,
+            0,
+            0,
+            0.217,
+            0,
+            0,
+            0,
+            0.212,
+            0.215,
+            0.209,
+            0,
+            0.225,
+            0.208,
+            0.209,
+            0,
+            0,
+            0.195,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "datasetId": "fight",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.706,
+          "equalErrorRate": 0.29,
+          "recommendedThreshold": {
+            "threshold": 0.357,
+            "truePositiveRate": 0.2,
+            "falseNegativeRate": 0.8,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.58,
+            "precision": 0.5,
+            "positiveAccepted": 2,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.202,
+            "p25": 0.2772,
+            "median": 0.311,
+            "mean": 0.2989,
+            "p75": 0.332,
+            "max": 0.358
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0,
+            "p25": 0.2303,
+            "median": 0.2635,
+            "mean": 0.2515,
+            "p75": 0.291,
+            "max": 0.384
+          },
+          "positiveScores": [
+            0.311,
+            0.326,
+            0.311,
+            0.358,
+            0.334,
+            0.358,
+            0.202,
+            0.287,
+            0.228,
+            0.274
+          ],
+          "negativeScores": [
+            0.251,
+            0.268,
+            0.189,
+            0.364,
+            0.254,
+            0.293,
+            0.266,
+            0.265,
+            0.344,
+            0.228,
+            0.286,
+            0.237,
+            0.12,
+            0.296,
+            0.27,
+            0.213,
+            0.241,
+            0,
+            0.384,
+            0.261,
+            0.226,
+            0.2,
+            0,
+            0.288,
+            0.159,
+            0.261,
+            0.262,
+            0.325,
+            0.354,
+            0.228,
+            0.275,
+            0.327,
+            0.286,
+            0.282,
+            0.356,
+            0.3,
+            0.256,
+            0.258,
+            0.243,
+            0.319,
+            0.277,
+            0.256,
+            0.122,
+            0.277,
+            0.292,
+            0.133,
+            0.247,
+            0.136,
+            0.323,
+            0.278
+          ]
+        },
+        {
+          "datasetId": "indo",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.911,
+          "equalErrorRate": 0.12,
+          "recommendedThreshold": {
+            "threshold": 0.3485,
+            "truePositiveRate": 0.5,
+            "falseNegativeRate": 0.5,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.73,
+            "precision": 0.7143,
+            "positiveAccepted": 5,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.287,
+            "p25": 0.3283,
+            "median": 0.3485,
+            "mean": 0.3494,
+            "p75": 0.3752,
+            "max": 0.393
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0,
+            "p25": 0.2452,
+            "median": 0.28,
+            "mean": 0.2623,
+            "p75": 0.2975,
+            "max": 0.412
+          },
+          "positiveScores": [
+            0.391,
+            0.318,
+            0.287,
+            0.326,
+            0.37,
+            0.377,
+            0.34,
+            0.357,
+            0.335,
+            0.393
+          ],
+          "negativeScores": [
+            0.284,
+            0.27,
+            0.244,
+            0.412,
+            0.231,
+            0.305,
+            0.272,
+            0.293,
+            0.36,
+            0.249,
+            0.274,
+            0.292,
+            0.134,
+            0.283,
+            0.239,
+            0.26,
+            0.266,
+            0,
+            0.319,
+            0.298,
+            0.277,
+            0.233,
+            0,
+            0.325,
+            0.191,
+            0.285,
+            0.305,
+            0.34,
+            0.316,
+            0.281,
+            0.298,
+            0.295,
+            0.32,
+            0.199,
+            0.338,
+            0.296,
+            0.279,
+            0.316,
+            0.277,
+            0.274,
+            0.294,
+            0.296,
+            0.138,
+            0.253,
+            0.291,
+            0.174,
+            0.237,
+            0.154,
+            0.26,
+            0.29
+          ]
+        },
+        {
+          "datasetId": "no",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.754,
+          "equalErrorRate": 0.3,
+          "recommendedThreshold": {
+            "threshold": 0.299,
+            "truePositiveRate": 0.1,
+            "falseNegativeRate": 0.9,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.53,
+            "precision": 0.3333,
+            "positiveAccepted": 1,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.199,
+            "p25": 0.236,
+            "median": 0.2625,
+            "mean": 0.2563,
+            "p75": 0.276,
+            "max": 0.303
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0,
+            "p25": 0.2052,
+            "median": 0.226,
+            "mean": 0.2198,
+            "p75": 0.244,
+            "max": 0.36
+          },
+          "positiveScores": [
+            0.303,
+            0.27,
+            0.199,
+            0.262,
+            0.284,
+            0.278,
+            0.218,
+            0.257,
+            0.263,
+            0.229
+          ],
+          "negativeScores": [
+            0.295,
+            0.263,
+            0.228,
+            0.36,
+            0.326,
+            0.206,
+            0.199,
+            0.224,
+            0.244,
+            0.173,
+            0.229,
+            0.236,
+            0.164,
+            0.214,
+            0.181,
+            0.246,
+            0.236,
+            0,
+            0.234,
+            0.222,
+            0.278,
+            0.254,
+            0,
+            0.269,
+            0.216,
+            0.259,
+            0.215,
+            0.179,
+            0.234,
+            0.21,
+            0.252,
+            0.212,
+            0.235,
+            0.195,
+            0.246,
+            0.244,
+            0.218,
+            0.262,
+            0.219,
+            0.225,
+            0.244,
+            0.227,
+            0.181,
+            0.17,
+            0.184,
+            0.197,
+            0.206,
+            0.205,
+            0.233,
+            0.239
+          ]
+        }
+      ]
+    },
+    "relationalDtw": {
+      "top1": {
+        "correct": 46,
+        "total": 60,
+        "accuracy": 0.7667,
+        "perClass": [
+          {
+            "datasetId": "cat",
+            "correct": 8,
+            "total": 10,
+            "accuracy": 0.8,
+            "errors": [
+              {
+                "sampleId": "cat (1)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.5009,
+                "strongestImpostorScore": 0.501,
+                "margin": -0.0001
+              },
+              {
+                "sampleId": "cat (10)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.424,
+                "strongestImpostorScore": 0.471,
+                "margin": -0.047
+              }
+            ]
+          },
+          {
+            "datasetId": "cloud",
+            "correct": 6,
+            "total": 10,
+            "accuracy": 0.6,
+            "errors": [
+              {
+                "sampleId": "cloud (4)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.5149,
+                "strongestImpostorScore": 0.5198,
+                "margin": -0.0049
+              },
+              {
+                "sampleId": "cloud (5)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.4691,
+                "strongestImpostorScore": 0.4959,
+                "margin": -0.0268
+              },
+              {
+                "sampleId": "cloud (7)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.5328,
+                "strongestImpostorScore": 0.5536,
+                "margin": -0.0208
+              },
+              {
+                "sampleId": "cloud (8)",
+                "predictedLabel": "no",
+                "genuineScore": 0.5275,
+                "strongestImpostorScore": 0.5312,
+                "margin": -0.0037
+              }
+            ]
+          },
+          {
+            "datasetId": "fade",
+            "correct": 8,
+            "total": 10,
+            "accuracy": 0.8,
+            "errors": [
+              {
+                "sampleId": "fade (6)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.5084,
+                "strongestImpostorScore": 0.5341,
+                "margin": -0.0257
+              },
+              {
+                "sampleId": "fade (7)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.5135,
+                "strongestImpostorScore": 0.5356,
+                "margin": -0.0221
+              }
+            ]
+          },
+          {
+            "datasetId": "fight",
+            "correct": 8,
+            "total": 10,
+            "accuracy": 0.8,
+            "errors": [
+              {
+                "sampleId": "fight (1)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.5159,
+                "strongestImpostorScore": 0.6025,
+                "margin": -0.0866
+              },
+              {
+                "sampleId": "fight (9)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.472,
+                "strongestImpostorScore": 0.4733,
+                "margin": -0.0013
+              }
+            ]
+          },
+          {
+            "datasetId": "indo",
+            "correct": 8,
+            "total": 10,
+            "accuracy": 0.8,
+            "errors": [
+              {
+                "sampleId": "indo (2)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.5772,
+                "strongestImpostorScore": 0.6025,
+                "margin": -0.0253
+              },
+              {
+                "sampleId": "indo (4)",
+                "predictedLabel": "fight",
+                "genuineScore": 0.565,
+                "strongestImpostorScore": 0.586,
+                "margin": -0.021
+              }
+            ]
+          },
+          {
+            "datasetId": "no",
+            "correct": 8,
+            "total": 10,
+            "accuracy": 0.8,
+            "errors": [
+              {
+                "sampleId": "no (7)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.5411,
+                "strongestImpostorScore": 0.5566,
+                "margin": -0.0155
+              },
+              {
+                "sampleId": "no (9)",
+                "predictedLabel": "indo",
+                "genuineScore": 0.5625,
+                "strongestImpostorScore": 0.5637,
+                "margin": -0.0012
+              }
+            ]
+          }
+        ],
+        "confusionMatrix": {
+          "cat": {
+            "cat": 8,
+            "cloud": 0,
+            "fade": 1,
+            "fight": 0,
+            "indo": 1,
+            "no": 0
+          },
+          "cloud": {
+            "cat": 0,
+            "cloud": 6,
+            "fade": 0,
+            "fight": 1,
+            "indo": 2,
+            "no": 1
+          },
+          "fade": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 8,
+            "fight": 0,
+            "indo": 2,
+            "no": 0
+          },
+          "fight": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 0,
+            "fight": 8,
+            "indo": 2,
+            "no": 0
+          },
+          "indo": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 0,
+            "fight": 2,
+            "indo": 8,
+            "no": 0
+          },
+          "no": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 0,
+            "fight": 0,
+            "indo": 2,
+            "no": 8
+          }
+        }
+      },
+      "macro": {
+        "rocAuc": 0.8673,
+        "equalErrorRate": 0.185,
+        "truePositiveRateAtFivePercentFpr": 0.65,
+        "observedFalsePositiveRate": 0.02
+      },
+      "perClass": [
+        {
+          "datasetId": "cat",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.838,
+          "equalErrorRate": 0.2,
+          "recommendedThreshold": {
+            "threshold": 0.5547,
+            "truePositiveRate": 0.7,
+            "falseNegativeRate": 0.3,
+            "falsePositiveRate": 0,
+            "trueNegativeRate": 1,
+            "balancedAccuracy": 0.85,
+            "precision": 1,
+            "positiveAccepted": 7,
+            "positiveTotal": 10,
+            "negativeAccepted": 0,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.424,
+            "p25": 0.5415,
+            "median": 0.5655,
+            "mean": 0.5488,
+            "p75": 0.5801,
+            "max": 0.5909
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.2657,
+            "p25": 0.4699,
+            "median": 0.5117,
+            "mean": 0.492,
+            "p75": 0.5263,
+            "max": 0.551
+          },
+          "positiveScores": [
+            0.5009,
+            0.5655,
+            0.5655,
+            0.5359,
+            0.5909,
+            0.5585,
+            0.5822,
+            0.5909,
+            0.5736,
+            0.424
+          ],
+          "negativeScores": [
+            0.5262,
+            0.2657,
+            0.5024,
+            0.5142,
+            0.4804,
+            0.5127,
+            0.4477,
+            0.5298,
+            0.4853,
+            0.5276,
+            0.5391,
+            0.4337,
+            0.4743,
+            0.5278,
+            0.4877,
+            0.4935,
+            0.4626,
+            0.5125,
+            0.5286,
+            0.5178,
+            0.4609,
+            0.462,
+            0.5104,
+            0.5483,
+            0.4316,
+            0.511,
+            0.4831,
+            0.5125,
+            0.5176,
+            0.5172,
+            0.5343,
+            0.4696,
+            0.4453,
+            0.5207,
+            0.5382,
+            0.5193,
+            0.471,
+            0.4352,
+            0.527,
+            0.5291,
+            0.4863,
+            0.4273,
+            0.454,
+            0.5037,
+            0.5168,
+            0.5264,
+            0.3727,
+            0.5142,
+            0.5351,
+            0.551
+          ]
+        },
+        {
+          "datasetId": "cloud",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.882,
+          "equalErrorRate": 0.2,
+          "recommendedThreshold": {
+            "threshold": 0.5393,
+            "truePositiveRate": 0.6,
+            "falseNegativeRate": 0.4,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.78,
+            "precision": 0.75,
+            "positiveAccepted": 6,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.4691,
+            "p25": 0.5288,
+            "median": 0.5449,
+            "mean": 0.537,
+            "p75": 0.556,
+            "max": 0.5618
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.2915,
+            "p25": 0.463,
+            "median": 0.4959,
+            "mean": 0.4831,
+            "p75": 0.5121,
+            "max": 0.5536
+          },
+          "positiveScores": [
+            0.5395,
+            0.556,
+            0.5618,
+            0.5149,
+            0.4691,
+            0.556,
+            0.5328,
+            0.5275,
+            0.5503,
+            0.5618
+          ],
+          "negativeScores": [
+            0.4742,
+            0.2915,
+            0.5273,
+            0.5124,
+            0.4534,
+            0.511,
+            0.4616,
+            0.4865,
+            0.5446,
+            0.5026,
+            0.4907,
+            0.399,
+            0.4726,
+            0.499,
+            0.4815,
+            0.5006,
+            0.426,
+            0.4854,
+            0.5536,
+            0.5193,
+            0.5391,
+            0.3816,
+            0.5016,
+            0.507,
+            0.4266,
+            0.5005,
+            0.4958,
+            0.4854,
+            0.5132,
+            0.5092,
+            0.5264,
+            0.4553,
+            0.4415,
+            0.5198,
+            0.5312,
+            0.5251,
+            0.4698,
+            0.4381,
+            0.4901,
+            0.5081,
+            0.5343,
+            0.394,
+            0.4667,
+            0.4851,
+            0.4974,
+            0.4618,
+            0.4279,
+            0.4959,
+            0.5252,
+            0.5088
+          ]
+        },
+        {
+          "datasetId": "fade",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.872,
+          "equalErrorRate": 0.1,
+          "recommendedThreshold": {
+            "threshold": 0.5516,
+            "truePositiveRate": 0.6,
+            "falseNegativeRate": 0.4,
+            "falsePositiveRate": 0,
+            "trueNegativeRate": 1,
+            "balancedAccuracy": 0.8,
+            "precision": 1,
+            "positiveAccepted": 6,
+            "positiveTotal": 10,
+            "negativeAccepted": 0,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.3617,
+            "p25": 0.5165,
+            "median": 0.5677,
+            "mean": 0.5814,
+            "p75": 0.6884,
+            "max": 0.722
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.3921,
+            "p25": 0.4323,
+            "median": 0.4528,
+            "mean": 0.457,
+            "p75": 0.4745,
+            "max": 0.5356
+          },
+          "positiveScores": [
+            0.3617,
+            0.5677,
+            0.611,
+            0.722,
+            0.5255,
+            0.5084,
+            0.5135,
+            0.5677,
+            0.7142,
+            0.722
+          ],
+          "negativeScores": [
+            0.4696,
+            0.4258,
+            0.527,
+            0.4924,
+            0.4389,
+            0.4428,
+            0.4958,
+            0.4708,
+            0.5298,
+            0.4157,
+            0.431,
+            0.4456,
+            0.4316,
+            0.4741,
+            0.4345,
+            0.4148,
+            0.4528,
+            0.4453,
+            0.5356,
+            0.4557,
+            0.4382,
+            0.4698,
+            0.4519,
+            0.4571,
+            0.4421,
+            0.4309,
+            0.4072,
+            0.4028,
+            0.4248,
+            0.44,
+            0.4831,
+            0.4817,
+            0.3921,
+            0.522,
+            0.5292,
+            0.4529,
+            0.4553,
+            0.3988,
+            0.5019,
+            0.4553,
+            0.463,
+            0.4351,
+            0.4244,
+            0.4688,
+            0.4746,
+            0.471,
+            0.4337,
+            0.4318,
+            0.4829,
+            0.4965
+          ]
+        },
+        {
+          "datasetId": "fight",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.802,
+          "equalErrorRate": 0.29,
+          "recommendedThreshold": {
+            "threshold": 0.5868,
+            "truePositiveRate": 0.5,
+            "falseNegativeRate": 0.5,
+            "falsePositiveRate": 0.02,
+            "trueNegativeRate": 0.98,
+            "balancedAccuracy": 0.74,
+            "precision": 0.8333,
+            "positiveAccepted": 5,
+            "positiveTotal": 10,
+            "negativeAccepted": 1,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.4689,
+            "p25": 0.5196,
+            "median": 0.5626,
+            "mean": 0.6324,
+            "p75": 0.6075,
+            "max": 1
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.3103,
+            "p25": 0.463,
+            "median": 0.4892,
+            "mean": 0.4761,
+            "p75": 0.5241,
+            "max": 0.6025
+          },
+          "positiveScores": [
+            0.5159,
+            0.6027,
+            0.6091,
+            1,
+            0.5876,
+            1,
+            0.4689,
+            0.5306,
+            0.472,
+            0.5377
+          ],
+          "negativeScores": [
+            0.4613,
+            0.4814,
+            0.3124,
+            0.5476,
+            0.4256,
+            0.4802,
+            0.5011,
+            0.4052,
+            0.6025,
+            0.4675,
+            0.4651,
+            0.5016,
+            0.3121,
+            0.5504,
+            0.4947,
+            0.5104,
+            0.482,
+            0.3184,
+            0.586,
+            0.4871,
+            0.5298,
+            0.4959,
+            0.3592,
+            0.531,
+            0.3801,
+            0.4681,
+            0.4914,
+            0.527,
+            0.574,
+            0.4795,
+            0.5244,
+            0.5273,
+            0.4846,
+            0.5352,
+            0.5549,
+            0.5233,
+            0.4865,
+            0.4408,
+            0.4919,
+            0.4987,
+            0.4928,
+            0.4805,
+            0.3103,
+            0.5097,
+            0.4969,
+            0.3847,
+            0.4854,
+            0.3129,
+            0.5713,
+            0.4623
+          ]
+        },
+        {
+          "datasetId": "indo",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.986,
+          "equalErrorRate": 0.02,
+          "recommendedThreshold": {
+            "threshold": 0.5644,
+            "truePositiveRate": 1,
+            "falseNegativeRate": 0,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.98,
+            "precision": 0.8333,
+            "positiveAccepted": 10,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.565,
+            "p25": 0.578,
+            "median": 0.5927,
+            "mean": 0.5951,
+            "p75": 0.6039,
+            "max": 0.6313
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.3134,
+            "p25": 0.4744,
+            "median": 0.5043,
+            "mean": 0.4942,
+            "p75": 0.5277,
+            "max": 0.6025
+          },
+          "positiveScores": [
+            0.6039,
+            0.5772,
+            0.5911,
+            0.565,
+            0.6313,
+            0.6039,
+            0.5722,
+            0.5804,
+            0.5944,
+            0.6313
+          ],
+          "negativeScores": [
+            0.501,
+            0.5042,
+            0.3134,
+            0.6025,
+            0.4531,
+            0.5207,
+            0.499,
+            0.5019,
+            0.5713,
+            0.5024,
+            0.5214,
+            0.4933,
+            0.3635,
+            0.5252,
+            0.5045,
+            0.5092,
+            0.5198,
+            0.3961,
+            0.5274,
+            0.5065,
+            0.5278,
+            0.4907,
+            0.3793,
+            0.535,
+            0.4355,
+            0.527,
+            0.4623,
+            0.5341,
+            0.5274,
+            0.5024,
+            0.5467,
+            0.5536,
+            0.5356,
+            0.4541,
+            0.5566,
+            0.5154,
+            0.5252,
+            0.4571,
+            0.4779,
+            0.5301,
+            0.5483,
+            0.4844,
+            0.3714,
+            0.4733,
+            0.5637,
+            0.4369,
+            0.4918,
+            0.3977,
+            0.4934,
+            0.5393
+          ]
+        },
+        {
+          "datasetId": "no",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.824,
+          "equalErrorRate": 0.3,
+          "recommendedThreshold": {
+            "threshold": 0.5572,
+            "truePositiveRate": 0.5,
+            "falseNegativeRate": 0.5,
+            "falsePositiveRate": 0.02,
+            "trueNegativeRate": 0.98,
+            "balancedAccuracy": 0.74,
+            "precision": 0.8333,
+            "positiveAccepted": 5,
+            "positiveTotal": 10,
+            "negativeAccepted": 1,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.4963,
+            "p25": 0.5262,
+            "median": 0.5494,
+            "mean": 0.5506,
+            "p75": 0.5625,
+            "max": 0.6083
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.2653,
+            "p25": 0.47,
+            "median": 0.504,
+            "mean": 0.494,
+            "p75": 0.5292,
+            "max": 0.5637
+          },
+          "positiveScores": [
+            0.5155,
+            0.6083,
+            0.5289,
+            0.5253,
+            0.4963,
+            0.6083,
+            0.5411,
+            0.5625,
+            0.5625,
+            0.5578
+          ],
+          "negativeScores": [
+            0.4944,
+            0.5037,
+            0.2653,
+            0.5549,
+            0.5566,
+            0.5168,
+            0.4777,
+            0.4643,
+            0.5227,
+            0.542,
+            0.4974,
+            0.5092,
+            0.4009,
+            0.5146,
+            0.5065,
+            0.5066,
+            0.4765,
+            0.4421,
+            0.5347,
+            0.5564,
+            0.5276,
+            0.4532,
+            0.3921,
+            0.486,
+            0.5427,
+            0.5091,
+            0.4673,
+            0.5292,
+            0.5347,
+            0.5544,
+            0.5291,
+            0.5193,
+            0.4965,
+            0.422,
+            0.5001,
+            0.5382,
+            0.5312,
+            0.4814,
+            0.4678,
+            0.5042,
+            0.551,
+            0.4969,
+            0.4417,
+            0.4414,
+            0.5112,
+            0.4406,
+            0.4926,
+            0.4369,
+            0.4931,
+            0.5637
+          ]
+        }
+      ]
+    },
+    "temporalRelationalDtw": {
+      "top1": {
+        "correct": 45,
+        "total": 60,
+        "accuracy": 0.75,
+        "perClass": [
+          {
+            "datasetId": "cat",
+            "correct": 7,
+            "total": 10,
+            "accuracy": 0.7,
+            "errors": [
+              {
+                "sampleId": "cat (4)",
+                "predictedLabel": "no",
+                "genuineScore": 0.5137,
+                "strongestImpostorScore": 0.5488,
+                "margin": -0.0351
+              },
+              {
+                "sampleId": "cat (9)",
+                "predictedLabel": "cloud",
+                "genuineScore": 0.5614,
+                "strongestImpostorScore": 0.5942,
+                "margin": -0.0328
+              },
+              {
+                "sampleId": "cat (10)",
+                "predictedLabel": "cloud",
+                "genuineScore": 0.4976,
+                "strongestImpostorScore": 0.5271,
+                "margin": -0.0295
+              }
+            ]
+          },
+          {
+            "datasetId": "cloud",
+            "correct": 5,
+            "total": 10,
+            "accuracy": 0.5,
+            "errors": [
+              {
+                "sampleId": "cloud (4)",
+                "predictedLabel": "cat",
+                "genuineScore": 0.564,
+                "strongestImpostorScore": 0.5876,
+                "margin": -0.0236
+              },
+              {
+                "sampleId": "cloud (5)",
+                "predictedLabel": "cat",
+                "genuineScore": 0.5508,
+                "strongestImpostorScore": 0.562,
+                "margin": -0.0112
+              },
+              {
+                "sampleId": "cloud (6)",
+                "predictedLabel": "cat",
+                "genuineScore": 0.5489,
+                "strongestImpostorScore": 0.5553,
+                "margin": -0.0064
+              },
+              {
+                "sampleId": "cloud (7)",
+                "predictedLabel": "no",
+                "genuineScore": 0.555,
+                "strongestImpostorScore": 0.6009,
+                "margin": -0.0459
+              },
+              {
+                "sampleId": "cloud (9)",
+                "predictedLabel": "no",
+                "genuineScore": 0.5744,
+                "strongestImpostorScore": 0.5783,
+                "margin": -0.0039
+              }
+            ]
+          },
+          {
+            "datasetId": "fade",
+            "correct": 10,
+            "total": 10,
+            "accuracy": 1,
+            "errors": []
+          },
+          {
+            "datasetId": "fight",
+            "correct": 8,
+            "total": 10,
+            "accuracy": 0.8,
+            "errors": [
+              {
+                "sampleId": "fight (1)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.5981,
+                "strongestImpostorScore": 0.6383,
+                "margin": -0.0402
+              },
+              {
+                "sampleId": "fight (9)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.5692,
+                "strongestImpostorScore": 0.583,
+                "margin": -0.0138
+              }
+            ]
+          },
+          {
+            "datasetId": "indo",
+            "correct": 6,
+            "total": 10,
+            "accuracy": 0.6,
+            "errors": [
+              {
+                "sampleId": "indo (2)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.6683,
+                "strongestImpostorScore": 0.6714,
+                "margin": -0.0031
+              },
+              {
+                "sampleId": "indo (4)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.6706,
+                "strongestImpostorScore": 0.6833,
+                "margin": -0.0127
+              },
+              {
+                "sampleId": "indo (7)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.6456,
+                "strongestImpostorScore": 0.6518,
+                "margin": -0.0062
+              },
+              {
+                "sampleId": "indo (10)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.6439,
+                "strongestImpostorScore": 0.6468,
+                "margin": -0.0029
+              }
+            ]
+          },
+          {
+            "datasetId": "no",
+            "correct": 9,
+            "total": 10,
+            "accuracy": 0.9,
+            "errors": [
+              {
+                "sampleId": "no (5)",
+                "predictedLabel": "fade",
+                "genuineScore": 0.5515,
+                "strongestImpostorScore": 0.5568,
+                "margin": -0.0053
+              }
+            ]
+          }
+        ],
+        "confusionMatrix": {
+          "cat": {
+            "cat": 7,
+            "cloud": 2,
+            "fade": 0,
+            "fight": 0,
+            "indo": 0,
+            "no": 1
+          },
+          "cloud": {
+            "cat": 3,
+            "cloud": 5,
+            "fade": 0,
+            "fight": 0,
+            "indo": 0,
+            "no": 2
+          },
+          "fade": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 10,
+            "fight": 0,
+            "indo": 0,
+            "no": 0
+          },
+          "fight": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 2,
+            "fight": 8,
+            "indo": 0,
+            "no": 0
+          },
+          "indo": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 4,
+            "fight": 0,
+            "indo": 6,
+            "no": 0
+          },
+          "no": {
+            "cat": 0,
+            "cloud": 0,
+            "fade": 1,
+            "fight": 0,
+            "indo": 0,
+            "no": 9
+          }
+        }
+      },
+      "macro": {
+        "rocAuc": 0.9142,
+        "equalErrorRate": 0.1533,
+        "truePositiveRateAtFivePercentFpr": 0.6167,
+        "observedFalsePositiveRate": 0.03
+      },
+      "perClass": [
+        {
+          "datasetId": "cat",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.83,
+          "equalErrorRate": 0.2,
+          "recommendedThreshold": {
+            "threshold": 0.577,
+            "truePositiveRate": 0.7,
+            "falseNegativeRate": 0.3,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.83,
+            "precision": 0.7778,
+            "positiveAccepted": 7,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.4976,
+            "p25": 0.5654,
+            "median": 0.5833,
+            "mean": 0.5728,
+            "p75": 0.5908,
+            "max": 0.6165
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.4527,
+            "p25": 0.5063,
+            "median": 0.5274,
+            "mean": 0.5236,
+            "p75": 0.5477,
+            "max": 0.596
+          },
+          "positiveScores": [
+            0.5842,
+            0.5823,
+            0.5915,
+            0.5137,
+            0.5888,
+            0.5774,
+            0.6165,
+            0.6143,
+            0.5614,
+            0.4976
+          ],
+          "negativeScores": [
+            0.536,
+            0.4743,
+            0.5286,
+            0.506,
+            0.4859,
+            0.596,
+            0.5441,
+            0.4959,
+            0.5187,
+            0.5419,
+            0.5623,
+            0.5145,
+            0.4772,
+            0.5089,
+            0.5303,
+            0.5876,
+            0.5143,
+            0.4541,
+            0.5481,
+            0.5582,
+            0.562,
+            0.506,
+            0.4626,
+            0.5243,
+            0.5321,
+            0.5553,
+            0.5535,
+            0.4541,
+            0.5274,
+            0.5318,
+            0.5766,
+            0.5453,
+            0.4745,
+            0.527,
+            0.5349,
+            0.5405,
+            0.5465,
+            0.4527,
+            0.5274,
+            0.5495,
+            0.5079,
+            0.5187,
+            0.4902,
+            0.4918,
+            0.512,
+            0.5572,
+            0.5072,
+            0.5201,
+            0.5504,
+            0.5573
+          ]
+        },
+        {
+          "datasetId": "cloud",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.847,
+          "equalErrorRate": 0.29,
+          "recommendedThreshold": {
+            "threshold": 0.595,
+            "truePositiveRate": 0.4,
+            "falseNegativeRate": 0.6,
+            "falsePositiveRate": 0,
+            "trueNegativeRate": 1,
+            "balancedAccuracy": 0.7,
+            "precision": 1,
+            "positiveAccepted": 4,
+            "positiveTotal": 10,
+            "negativeAccepted": 0,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.5489,
+            "p25": 0.5573,
+            "median": 0.5717,
+            "mean": 0.5777,
+            "p75": 0.5996,
+            "max": 0.6102
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.4652,
+            "p25": 0.5157,
+            "median": 0.5347,
+            "mean": 0.5352,
+            "p75": 0.5672,
+            "max": 0.5942
+          },
+          "positiveScores": [
+            0.5691,
+            0.6102,
+            0.608,
+            0.564,
+            0.5508,
+            0.5489,
+            0.555,
+            0.5958,
+            0.5744,
+            0.6009
+          ],
+          "negativeScores": [
+            0.5388,
+            0.494,
+            0.5337,
+            0.5023,
+            0.5357,
+            0.5744,
+            0.5456,
+            0.4652,
+            0.5384,
+            0.5693,
+            0.5504,
+            0.5166,
+            0.5121,
+            0.5135,
+            0.5689,
+            0.5462,
+            0.5219,
+            0.4732,
+            0.5651,
+            0.545,
+            0.5406,
+            0.5154,
+            0.5089,
+            0.5446,
+            0.5299,
+            0.5685,
+            0.5679,
+            0.4907,
+            0.5182,
+            0.5715,
+            0.5871,
+            0.5463,
+            0.4765,
+            0.5311,
+            0.5806,
+            0.5779,
+            0.5545,
+            0.4712,
+            0.518,
+            0.5885,
+            0.5942,
+            0.5263,
+            0.491,
+            0.5185,
+            0.5751,
+            0.5271,
+            0.5177,
+            0.5024,
+            0.5217,
+            0.5872
+          ]
+        },
+        {
+          "datasetId": "fade",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.996,
+          "equalErrorRate": 0.02,
+          "recommendedThreshold": {
+            "threshold": 0.6614,
+            "truePositiveRate": 1,
+            "falseNegativeRate": 0,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.98,
+            "precision": 0.8333,
+            "positiveAccepted": 10,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.6661,
+            "p25": 0.7467,
+            "median": 0.7614,
+            "mean": 0.759,
+            "p75": 0.7847,
+            "max": 0.8028
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.5094,
+            "p25": 0.534,
+            "median": 0.5579,
+            "mean": 0.5698,
+            "p75": 0.602,
+            "max": 0.6833
+          },
+          "positiveScores": [
+            0.6661,
+            0.7474,
+            0.7795,
+            0.8028,
+            0.7465,
+            0.7359,
+            0.7569,
+            0.766,
+            0.7864,
+            0.8024
+          ],
+          "negativeScores": [
+            0.514,
+            0.5151,
+            0.6383,
+            0.63,
+            0.547,
+            0.5224,
+            0.563,
+            0.611,
+            0.6714,
+            0.5453,
+            0.5235,
+            0.5317,
+            0.5671,
+            0.6084,
+            0.5362,
+            0.5333,
+            0.5295,
+            0.5614,
+            0.6833,
+            0.5581,
+            0.5389,
+            0.5422,
+            0.6112,
+            0.6567,
+            0.5568,
+            0.5379,
+            0.5094,
+            0.55,
+            0.6244,
+            0.5609,
+            0.5578,
+            0.5698,
+            0.5535,
+            0.6518,
+            0.5826,
+            0.5295,
+            0.5276,
+            0.5529,
+            0.631,
+            0.5658,
+            0.5518,
+            0.5306,
+            0.583,
+            0.621,
+            0.5602,
+            0.5246,
+            0.5323,
+            0.5666,
+            0.6468,
+            0.572
+          ]
+        },
+        {
+          "datasetId": "fight",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.938,
+          "equalErrorRate": 0.12,
+          "recommendedThreshold": {
+            "threshold": 0.613,
+            "truePositiveRate": 0.5,
+            "falseNegativeRate": 0.5,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.73,
+            "precision": 0.7143,
+            "positiveAccepted": 5,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.566,
+            "p25": 0.58,
+            "median": 0.6067,
+            "mean": 0.623,
+            "p75": 0.629,
+            "max": 0.7278
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.4473,
+            "p25": 0.4819,
+            "median": 0.511,
+            "mean": 0.5205,
+            "p75": 0.5556,
+            "max": 0.6295
+          },
+          "positiveScores": [
+            0.5981,
+            0.6314,
+            0.622,
+            0.7278,
+            0.6142,
+            0.7278,
+            0.574,
+            0.566,
+            0.5692,
+            0.5992
+          ],
+          "negativeScores": [
+            0.4473,
+            0.4478,
+            0.5517,
+            0.5114,
+            0.4937,
+            0.4919,
+            0.5309,
+            0.5801,
+            0.5765,
+            0.4782,
+            0.4751,
+            0.4873,
+            0.5676,
+            0.5425,
+            0.466,
+            0.5106,
+            0.478,
+            0.5685,
+            0.5967,
+            0.54,
+            0.5017,
+            0.4714,
+            0.5606,
+            0.5563,
+            0.4801,
+            0.5223,
+            0.4729,
+            0.6295,
+            0.5409,
+            0.4916,
+            0.49,
+            0.5266,
+            0.6192,
+            0.5732,
+            0.5511,
+            0.4663,
+            0.4882,
+            0.6119,
+            0.5238,
+            0.5056,
+            0.4946,
+            0.4747,
+            0.5607,
+            0.5125,
+            0.488,
+            0.4695,
+            0.4726,
+            0.5635,
+            0.5537,
+            0.508
+          ]
+        },
+        {
+          "datasetId": "indo",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.932,
+          "equalErrorRate": 0.09,
+          "recommendedThreshold": {
+            "threshold": 0.6587,
+            "truePositiveRate": 0.3,
+            "falseNegativeRate": 0.7,
+            "falsePositiveRate": 0.04,
+            "trueNegativeRate": 0.96,
+            "balancedAccuracy": 0.63,
+            "precision": 0.6,
+            "positiveAccepted": 3,
+            "positiveTotal": 10,
+            "negativeAccepted": 2,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.6224,
+            "p25": 0.6439,
+            "median": 0.6475,
+            "mean": 0.6503,
+            "p75": 0.6619,
+            "max": 0.6706
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.4816,
+            "p25": 0.5199,
+            "median": 0.5345,
+            "mean": 0.5488,
+            "p75": 0.5719,
+            "max": 0.6918
+          },
+          "positiveScores": [
+            0.6494,
+            0.6683,
+            0.6224,
+            0.6706,
+            0.6659,
+            0.6497,
+            0.6456,
+            0.644,
+            0.6429,
+            0.6439
+          ],
+          "negativeScores": [
+            0.5205,
+            0.5176,
+            0.5956,
+            0.5985,
+            0.4816,
+            0.5213,
+            0.5542,
+            0.6515,
+            0.5504,
+            0.5224,
+            0.5237,
+            0.4998,
+            0.6062,
+            0.5478,
+            0.5243,
+            0.482,
+            0.5107,
+            0.6034,
+            0.4943,
+            0.5285,
+            0.5197,
+            0.5067,
+            0.6162,
+            0.5708,
+            0.4926,
+            0.5354,
+            0.5015,
+            0.6918,
+            0.5218,
+            0.5277,
+            0.559,
+            0.5723,
+            0.6799,
+            0.5533,
+            0.5431,
+            0.5428,
+            0.5151,
+            0.6502,
+            0.5304,
+            0.5337,
+            0.5166,
+            0.53,
+            0.5785,
+            0.5767,
+            0.5443,
+            0.487,
+            0.5285,
+            0.5991,
+            0.5424,
+            0.5408
+          ]
+        },
+        {
+          "datasetId": "no",
+          "referenceVideos": 10,
+          "positiveTrials": 10,
+          "negativeControlTrials": 50,
+          "rocAuc": 0.942,
+          "equalErrorRate": 0.2,
+          "recommendedThreshold": {
+            "threshold": 0.5842,
+            "truePositiveRate": 0.8,
+            "falseNegativeRate": 0.2,
+            "falsePositiveRate": 0.02,
+            "trueNegativeRate": 0.98,
+            "balancedAccuracy": 0.89,
+            "precision": 0.8889,
+            "positiveAccepted": 8,
+            "positiveTotal": 10,
+            "negativeAccepted": 1,
+            "negativeTotal": 50
+          },
+          "positiveScore": {
+            "count": 10,
+            "min": 0.5515,
+            "p25": 0.5876,
+            "median": 0.6033,
+            "mean": 0.6019,
+            "p75": 0.626,
+            "max": 0.6407
+          },
+          "negativeScore": {
+            "count": 50,
+            "min": 0.4823,
+            "p25": 0.5137,
+            "median": 0.5329,
+            "mean": 0.5351,
+            "p75": 0.5589,
+            "max": 0.6009
+          },
+          "positiveScores": [
+            0.5653,
+            0.6407,
+            0.5879,
+            0.6042,
+            0.5515,
+            0.6321,
+            0.6078,
+            0.64,
+            0.5875,
+            0.6024
+          ],
+          "negativeScores": [
+            0.5182,
+            0.5495,
+            0.5014,
+            0.5455,
+            0.5097,
+            0.5278,
+            0.5753,
+            0.5678,
+            0.5225,
+            0.5333,
+            0.5136,
+            0.5793,
+            0.5368,
+            0.5216,
+            0.5139,
+            0.5488,
+            0.5591,
+            0.548,
+            0.4846,
+            0.5677,
+            0.5575,
+            0.5371,
+            0.5312,
+            0.5083,
+            0.5324,
+            0.5196,
+            0.5325,
+            0.5809,
+            0.4921,
+            0.4996,
+            0.5378,
+            0.6009,
+            0.5715,
+            0.4827,
+            0.5345,
+            0.5271,
+            0.5688,
+            0.5687,
+            0.4823,
+            0.5297,
+            0.5737,
+            0.5783,
+            0.5584,
+            0.4868,
+            0.5014,
+            0.506,
+            0.5728,
+            0.5422,
+            0.5144,
+            0.5006
+          ]
+        }
+      ]
+    }
+  },
+  "trainingDiagnostics": [
+    {
+      "datasetId": "cat",
+      "threshold": 0.577,
+      "summary": {
+        "meanTrainIncludedScore": 0.7203,
+        "meanLeaveOneOutScore": 0.5728,
+        "meanSelfInclusionGap": 0.1475,
+        "durationSeconds": {
+          "count": 10,
+          "min": 16,
+          "p25": 18.443,
+          "median": 18.5705,
+          "mean": 18.3877,
+          "p75": 18.7915,
+          "max": 19.067
+        },
+        "belowThresholdVideos": [
+          "cat (10)",
+          "cat (4)",
+          "cat (9)"
+        ]
+      },
+      "videos": [
+        {
+          "videoId": "cat (10)",
+          "durationSeconds": 18.867,
+          "frames": 186,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.1989,
+          "rightHandCoverage": 0.1398,
+          "bothHandsCoverage": 0.0484,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.675,
+          "leaveOneOutScore": 0.4976,
+          "selfInclusionGap": 0.1774,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (7)",
+              "score": 0.5504
+            },
+            {
+              "videoId": "cat (5)",
+              "score": 0.4745
+            },
+            {
+              "videoId": "cat (9)",
+              "score": 0.4677
+            }
+          ]
+        },
+        {
+          "videoId": "cat (4)",
+          "durationSeconds": 16,
+          "frames": 160,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.7688,
+          "rightHandCoverage": 0.6875,
+          "bothHandsCoverage": 0.5813,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.6797,
+          "leaveOneOutScore": 0.5137,
+          "selfInclusionGap": 0.166,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (5)",
+              "score": 0.5252
+            },
+            {
+              "videoId": "cat (6)",
+              "score": 0.5139
+            },
+            {
+              "videoId": "cat (9)",
+              "score": 0.5019
+            }
+          ]
+        },
+        {
+          "videoId": "cat (9)",
+          "durationSeconds": 18.4,
+          "frames": 184,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6576,
+          "rightHandCoverage": 0.3533,
+          "bothHandsCoverage": 0.2935,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7086,
+          "leaveOneOutScore": 0.5614,
+          "selfInclusionGap": 0.1472,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (8)",
+              "score": 0.5666
+            },
+            {
+              "videoId": "cat (7)",
+              "score": 0.5591
+            },
+            {
+              "videoId": "cat (3)",
+              "score": 0.5585
+            }
+          ]
+        },
+        {
+          "videoId": "cat (6)",
+          "durationSeconds": 18.667,
+          "frames": 186,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.7849,
+          "rightHandCoverage": 0.8763,
+          "bothHandsCoverage": 0.672,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.723,
+          "leaveOneOutScore": 0.5774,
+          "selfInclusionGap": 0.1456,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (7)",
+              "score": 0.5848
+            },
+            {
+              "videoId": "cat (3)",
+              "score": 0.5841
+            },
+            {
+              "videoId": "cat (8)",
+              "score": 0.5634
+            }
+          ]
+        },
+        {
+          "videoId": "cat (2)",
+          "durationSeconds": 18.435,
+          "frames": 184,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.875,
+          "rightHandCoverage": 0.8478,
+          "bothHandsCoverage": 0.7717,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7269,
+          "leaveOneOutScore": 0.5823,
+          "selfInclusionGap": 0.1446,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (7)",
+              "score": 0.6037
+            },
+            {
+              "videoId": "cat (8)",
+              "score": 0.5768
+            },
+            {
+              "videoId": "cat (3)",
+              "score": 0.5663
+            }
+          ]
+        },
+        {
+          "videoId": "cat (1)",
+          "durationSeconds": 18.574,
+          "frames": 186,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.7473,
+          "rightHandCoverage": 0.5215,
+          "bothHandsCoverage": 0.4194,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7256,
+          "leaveOneOutScore": 0.5842,
+          "selfInclusionGap": 0.1414,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (3)",
+              "score": 0.5937
+            },
+            {
+              "videoId": "cat (8)",
+              "score": 0.583
+            },
+            {
+              "videoId": "cat (7)",
+              "score": 0.576
+            }
+          ]
+        },
+        {
+          "videoId": "cat (5)",
+          "durationSeconds": 19.067,
+          "frames": 190,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.5,
+          "rightHandCoverage": 0.3316,
+          "bothHandsCoverage": 0.1895,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7297,
+          "leaveOneOutScore": 0.5888,
+          "selfInclusionGap": 0.1409,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (8)",
+              "score": 0.6107
+            },
+            {
+              "videoId": "cat (3)",
+              "score": 0.5785
+            },
+            {
+              "videoId": "cat (7)",
+              "score": 0.5773
+            }
+          ]
+        },
+        {
+          "videoId": "cat (3)",
+          "durationSeconds": 18.467,
+          "frames": 184,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6685,
+          "rightHandCoverage": 0.75,
+          "bothHandsCoverage": 0.5489,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7301,
+          "leaveOneOutScore": 0.5915,
+          "selfInclusionGap": 0.1386,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (7)",
+              "score": 0.5967
+            },
+            {
+              "videoId": "cat (1)",
+              "score": 0.5937
+            },
+            {
+              "videoId": "cat (6)",
+              "score": 0.5841
+            }
+          ]
+        },
+        {
+          "videoId": "cat (8)",
+          "durationSeconds": 18.567,
+          "frames": 186,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.7366,
+          "rightHandCoverage": 0.2957,
+          "bothHandsCoverage": 0.2419,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7533,
+          "leaveOneOutScore": 0.6143,
+          "selfInclusionGap": 0.139,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (7)",
+              "score": 0.6492
+            },
+            {
+              "videoId": "cat (5)",
+              "score": 0.6107
+            },
+            {
+              "videoId": "cat (1)",
+              "score": 0.583
+            }
+          ]
+        },
+        {
+          "videoId": "cat (7)",
+          "durationSeconds": 18.833,
+          "frames": 189,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4603,
+          "rightHandCoverage": 0.328,
+          "bothHandsCoverage": 0.2275,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.751,
+          "leaveOneOutScore": 0.6165,
+          "selfInclusionGap": 0.1345,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cat (8)",
+              "score": 0.6492
+            },
+            {
+              "videoId": "cat (2)",
+              "score": 0.6037
+            },
+            {
+              "videoId": "cat (3)",
+              "score": 0.5967
+            }
+          ]
+        }
+      ],
+      "hardestNegativeControls": [
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (2)",
+          "score": 0.596,
+          "durationSeconds": 17.533
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (4)",
+          "score": 0.5876,
+          "durationSeconds": 18.505
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (7)",
+          "score": 0.5766,
+          "durationSeconds": 16.333
+        },
+        {
+          "datasetId": "no",
+          "videoId": "no (4)",
+          "score": 0.5674,
+          "durationSeconds": 15.933
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (3)",
+          "score": 0.5623,
+          "durationSeconds": 17.467
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (5)",
+          "score": 0.562,
+          "durationSeconds": 18
+        },
+        {
+          "datasetId": "no",
+          "videoId": "no (10)",
+          "score": 0.5573,
+          "durationSeconds": 16.2
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (10)",
+          "score": 0.5572,
+          "durationSeconds": 17.033
+        }
+      ]
+    },
+    {
+      "datasetId": "cloud",
+      "threshold": 0.595,
+      "summary": {
+        "meanTrainIncludedScore": 0.7225,
+        "meanLeaveOneOutScore": 0.5777,
+        "meanSelfInclusionGap": 0.1448,
+        "durationSeconds": {
+          "count": 10,
+          "min": 16,
+          "p25": 16.958,
+          "median": 17.3835,
+          "mean": 17.3737,
+          "p75": 17.8833,
+          "max": 18.633
+        },
+        "belowThresholdVideos": [
+          "cloud (6)",
+          "cloud (5)",
+          "cloud (7)",
+          "cloud (4)",
+          "cloud (1)",
+          "cloud (9)"
+        ]
+      },
+      "videos": [
+        {
+          "videoId": "cloud (6)",
+          "durationSeconds": 18.633,
+          "frames": 186,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.7849,
+          "rightHandCoverage": 0.7204,
+          "bothHandsCoverage": 0.5591,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7052,
+          "leaveOneOutScore": 0.5489,
+          "selfInclusionGap": 0.1563,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (4)",
+              "score": 0.5657
+            },
+            {
+              "videoId": "cloud (2)",
+              "score": 0.5497
+            },
+            {
+              "videoId": "cloud (5)",
+              "score": 0.5313
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (5)",
+          "durationSeconds": 18,
+          "frames": 179,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.3464,
+          "rightHandCoverage": 0.2682,
+          "bothHandsCoverage": 0.1061,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7027,
+          "leaveOneOutScore": 0.5508,
+          "selfInclusionGap": 0.1519,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (4)",
+              "score": 0.5549
+            },
+            {
+              "videoId": "cloud (2)",
+              "score": 0.5531
+            },
+            {
+              "videoId": "cloud (3)",
+              "score": 0.5443
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (7)",
+          "durationSeconds": 16.333,
+          "frames": 164,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6098,
+          "rightHandCoverage": 0.3171,
+          "bothHandsCoverage": 0.2378,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7076,
+          "leaveOneOutScore": 0.555,
+          "selfInclusionGap": 0.1526,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (9)",
+              "score": 0.5617
+            },
+            {
+              "videoId": "cloud (2)",
+              "score": 0.561
+            },
+            {
+              "videoId": "cloud (8)",
+              "score": 0.5423
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (4)",
+          "durationSeconds": 18.505,
+          "frames": 185,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4541,
+          "rightHandCoverage": 0.6054,
+          "bothHandsCoverage": 0.3838,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7124,
+          "leaveOneOutScore": 0.564,
+          "selfInclusionGap": 0.1484,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (2)",
+              "score": 0.5715
+            },
+            {
+              "videoId": "cloud (6)",
+              "score": 0.5657
+            },
+            {
+              "videoId": "cloud (5)",
+              "score": 0.5549
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (1)",
+          "durationSeconds": 16.933,
+          "frames": 169,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6746,
+          "rightHandCoverage": 0.7041,
+          "bothHandsCoverage": 0.5207,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7201,
+          "leaveOneOutScore": 0.5691,
+          "selfInclusionGap": 0.151,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (10)",
+              "score": 0.5991
+            },
+            {
+              "videoId": "cloud (2)",
+              "score": 0.5612
+            },
+            {
+              "videoId": "cloud (3)",
+              "score": 0.5469
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (9)",
+          "durationSeconds": 16,
+          "frames": 160,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6062,
+          "rightHandCoverage": 0.5375,
+          "bothHandsCoverage": 0.3875,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7205,
+          "leaveOneOutScore": 0.5744,
+          "selfInclusionGap": 0.1461,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (2)",
+              "score": 0.5987
+            },
+            {
+              "videoId": "cloud (8)",
+              "score": 0.5628
+            },
+            {
+              "videoId": "cloud (7)",
+              "score": 0.5617
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (8)",
+          "durationSeconds": 17.3,
+          "frames": 173,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4335,
+          "rightHandCoverage": 0.3584,
+          "bothHandsCoverage": 0.2543,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7325,
+          "leaveOneOutScore": 0.5958,
+          "selfInclusionGap": 0.1367,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (2)",
+              "score": 0.6056
+            },
+            {
+              "videoId": "cloud (10)",
+              "score": 0.5917
+            },
+            {
+              "videoId": "cloud (3)",
+              "score": 0.5899
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (10)",
+          "durationSeconds": 17.033,
+          "frames": 170,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.5176,
+          "rightHandCoverage": 0.6118,
+          "bothHandsCoverage": 0.3588,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7356,
+          "leaveOneOutScore": 0.6009,
+          "selfInclusionGap": 0.1347,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (3)",
+              "score": 0.6079
+            },
+            {
+              "videoId": "cloud (1)",
+              "score": 0.5991
+            },
+            {
+              "videoId": "cloud (2)",
+              "score": 0.5959
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (3)",
+          "durationSeconds": 17.467,
+          "frames": 175,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4114,
+          "rightHandCoverage": 0.3943,
+          "bothHandsCoverage": 0.2171,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7447,
+          "leaveOneOutScore": 0.608,
+          "selfInclusionGap": 0.1367,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (2)",
+              "score": 0.6263
+            },
+            {
+              "videoId": "cloud (10)",
+              "score": 0.6079
+            },
+            {
+              "videoId": "cloud (8)",
+              "score": 0.5899
+            }
+          ]
+        },
+        {
+          "videoId": "cloud (2)",
+          "durationSeconds": 17.533,
+          "frames": 175,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.5143,
+          "rightHandCoverage": 0.3543,
+          "bothHandsCoverage": 0.2343,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.744,
+          "leaveOneOutScore": 0.6102,
+          "selfInclusionGap": 0.1338,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "cloud (3)",
+              "score": 0.6263
+            },
+            {
+              "videoId": "cloud (8)",
+              "score": 0.6056
+            },
+            {
+              "videoId": "cloud (9)",
+              "score": 0.5987
+            }
+          ]
+        }
+      ],
+      "hardestNegativeControls": [
+        {
+          "datasetId": "no",
+          "videoId": "no (7)",
+          "score": 0.5953,
+          "durationSeconds": 15.9
+        },
+        {
+          "datasetId": "cat",
+          "videoId": "cat (9)",
+          "score": 0.5942,
+          "durationSeconds": 18.4
+        },
+        {
+          "datasetId": "no",
+          "videoId": "no (10)",
+          "score": 0.5913,
+          "durationSeconds": 16.2
+        },
+        {
+          "datasetId": "no",
+          "videoId": "no (8)",
+          "score": 0.5885,
+          "durationSeconds": 15.6
+        },
+        {
+          "datasetId": "cat",
+          "videoId": "cat (7)",
+          "score": 0.5871,
+          "durationSeconds": 18.833
+        },
+        {
+          "datasetId": "cat",
+          "videoId": "cat (2)",
+          "score": 0.5834,
+          "durationSeconds": 18.435
+        },
+        {
+          "datasetId": "cat",
+          "videoId": "cat (8)",
+          "score": 0.5779,
+          "durationSeconds": 18.567
+        },
+        {
+          "datasetId": "no",
+          "videoId": "no (9)",
+          "score": 0.5751,
+          "durationSeconds": 17.467
+        }
+      ]
+    },
+    {
+      "datasetId": "fade",
+      "threshold": 0.6614,
+      "summary": {
+        "meanTrainIncludedScore": 0.8449,
+        "meanLeaveOneOutScore": 0.759,
+        "meanSelfInclusionGap": 0.0859,
+        "durationSeconds": {
+          "count": 10,
+          "min": 9.867,
+          "p25": 9.9662,
+          "median": 10.15,
+          "mean": 10.2999,
+          "p75": 10.3247,
+          "max": 11.6
+        },
+        "belowThresholdVideos": []
+      },
+      "videos": [
+        {
+          "videoId": "fade (1)",
+          "durationSeconds": 10.733,
+          "frames": 108,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.2778,
+          "rightHandCoverage": 0.5741,
+          "bothHandsCoverage": 0.2315,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7811,
+          "leaveOneOutScore": 0.6661,
+          "selfInclusionGap": 0.115,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (7)",
+              "score": 0.6773
+            },
+            {
+              "videoId": "fade (6)",
+              "score": 0.6661
+            },
+            {
+              "videoId": "fade (5)",
+              "score": 0.6548
+            }
+          ]
+        },
+        {
+          "videoId": "fade (6)",
+          "durationSeconds": 10.033,
+          "frames": 101,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6733,
+          "rightHandCoverage": 0.8416,
+          "bothHandsCoverage": 0.5743,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8295,
+          "leaveOneOutScore": 0.7359,
+          "selfInclusionGap": 0.0936,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (7)",
+              "score": 0.7666
+            },
+            {
+              "videoId": "fade (8)",
+              "score": 0.722
+            },
+            {
+              "videoId": "fade (2)",
+              "score": 0.7192
+            }
+          ]
+        },
+        {
+          "videoId": "fade (5)",
+          "durationSeconds": 9.966,
+          "frames": 100,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.56,
+          "rightHandCoverage": 0.65,
+          "bothHandsCoverage": 0.53,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8343,
+          "leaveOneOutScore": 0.7465,
+          "selfInclusionGap": 0.0878,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (8)",
+              "score": 0.7546
+            },
+            {
+              "videoId": "fade (3)",
+              "score": 0.7484
+            },
+            {
+              "videoId": "fade (10)",
+              "score": 0.7366
+            }
+          ]
+        },
+        {
+          "videoId": "fade (2)",
+          "durationSeconds": 9.933,
+          "frames": 99,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6364,
+          "rightHandCoverage": 0.7374,
+          "bothHandsCoverage": 0.5051,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8367,
+          "leaveOneOutScore": 0.7474,
+          "selfInclusionGap": 0.0893,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (8)",
+              "score": 0.7748
+            },
+            {
+              "videoId": "fade (7)",
+              "score": 0.7353
+            },
+            {
+              "videoId": "fade (5)",
+              "score": 0.732
+            }
+          ]
+        },
+        {
+          "videoId": "fade (7)",
+          "durationSeconds": 9.867,
+          "frames": 99,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4747,
+          "rightHandCoverage": 0.5758,
+          "bothHandsCoverage": 0.3131,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8451,
+          "leaveOneOutScore": 0.7569,
+          "selfInclusionGap": 0.0882,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (8)",
+              "score": 0.7687
+            },
+            {
+              "videoId": "fade (6)",
+              "score": 0.7666
+            },
+            {
+              "videoId": "fade (2)",
+              "score": 0.7353
+            }
+          ]
+        },
+        {
+          "videoId": "fade (8)",
+          "durationSeconds": 9.967,
+          "frames": 100,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.42,
+          "rightHandCoverage": 0.73,
+          "bothHandsCoverage": 0.33,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8478,
+          "leaveOneOutScore": 0.766,
+          "selfInclusionGap": 0.0818,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (2)",
+              "score": 0.7748
+            },
+            {
+              "videoId": "fade (7)",
+              "score": 0.7687
+            },
+            {
+              "videoId": "fade (5)",
+              "score": 0.7546
+            }
+          ]
+        },
+        {
+          "videoId": "fade (3)",
+          "durationSeconds": 10.3,
+          "frames": 103,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.534,
+          "rightHandCoverage": 0.6408,
+          "bothHandsCoverage": 0.466,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8596,
+          "leaveOneOutScore": 0.7795,
+          "selfInclusionGap": 0.0801,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (4)",
+              "score": 0.7987
+            },
+            {
+              "videoId": "fade (10)",
+              "score": 0.78
+            },
+            {
+              "videoId": "fade (9)",
+              "score": 0.7599
+            }
+          ]
+        },
+        {
+          "videoId": "fade (9)",
+          "durationSeconds": 11.6,
+          "frames": 116,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6897,
+          "rightHandCoverage": 0.8362,
+          "bothHandsCoverage": 0.6121,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8665,
+          "leaveOneOutScore": 0.7864,
+          "selfInclusionGap": 0.0801,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (10)",
+              "score": 0.8084
+            },
+            {
+              "videoId": "fade (4)",
+              "score": 0.791
+            },
+            {
+              "videoId": "fade (3)",
+              "score": 0.7599
+            }
+          ]
+        },
+        {
+          "videoId": "fade (10)",
+          "durationSeconds": 10.333,
+          "frames": 104,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6154,
+          "rightHandCoverage": 0.5865,
+          "bothHandsCoverage": 0.4231,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8757,
+          "leaveOneOutScore": 0.8024,
+          "selfInclusionGap": 0.0733,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (4)",
+              "score": 0.8187
+            },
+            {
+              "videoId": "fade (9)",
+              "score": 0.8084
+            },
+            {
+              "videoId": "fade (3)",
+              "score": 0.78
+            }
+          ]
+        },
+        {
+          "videoId": "fade (4)",
+          "durationSeconds": 10.267,
+          "frames": 103,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6796,
+          "rightHandCoverage": 0.7864,
+          "bothHandsCoverage": 0.6214,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.8725,
+          "leaveOneOutScore": 0.8028,
+          "selfInclusionGap": 0.0697,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fade (10)",
+              "score": 0.8187
+            },
+            {
+              "videoId": "fade (3)",
+              "score": 0.7987
+            },
+            {
+              "videoId": "fade (9)",
+              "score": 0.791
+            }
+          ]
+        }
+      ],
+      "hardestNegativeControls": [
+        {
+          "datasetId": "indo",
+          "videoId": "indo (4)",
+          "score": 0.6833,
+          "durationSeconds": 9.633
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (2)",
+          "score": 0.6714,
+          "durationSeconds": 9.867
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (7)",
+          "score": 0.6672,
+          "durationSeconds": 10.267
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (5)",
+          "score": 0.6567,
+          "durationSeconds": 9.433
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (10)",
+          "score": 0.6468,
+          "durationSeconds": 9.2
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (8)",
+          "score": 0.6416,
+          "durationSeconds": 9.3
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (6)",
+          "score": 0.6412,
+          "durationSeconds": 9.667
+        },
+        {
+          "datasetId": "fight",
+          "videoId": "fight (1)",
+          "score": 0.6383,
+          "durationSeconds": 11
+        }
+      ]
+    },
+    {
+      "datasetId": "fight",
+      "threshold": 0.613,
+      "summary": {
+        "meanTrainIncludedScore": 0.761,
+        "meanLeaveOneOutScore": 0.623,
+        "meanSelfInclusionGap": 0.138,
+        "durationSeconds": {
+          "count": 10,
+          "min": 10.533,
+          "p25": 10.85,
+          "median": 11.0165,
+          "mean": 11.2632,
+          "p75": 11.8915,
+          "max": 12
+        },
+        "belowThresholdVideos": [
+          "fight (8)",
+          "fight (9)",
+          "fight (7)",
+          "fight (1)",
+          "fight (10)"
+        ]
+      },
+      "videos": [
+        {
+          "videoId": "fight (8)",
+          "durationSeconds": 11.033,
+          "frames": 111,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6486,
+          "rightHandCoverage": 0.5045,
+          "bothHandsCoverage": 0.3514,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.717,
+          "leaveOneOutScore": 0.566,
+          "selfInclusionGap": 0.151,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (1)",
+              "score": 0.5935
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.5575
+            },
+            {
+              "videoId": "fight (2)",
+              "score": 0.5471
+            }
+          ]
+        },
+        {
+          "videoId": "fight (9)",
+          "durationSeconds": 10.533,
+          "frames": 106,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6509,
+          "rightHandCoverage": 0.5943,
+          "bothHandsCoverage": 0.4528,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7134,
+          "leaveOneOutScore": 0.5692,
+          "selfInclusionGap": 0.1442,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (1)",
+              "score": 0.5704
+            },
+            {
+              "videoId": "fight (2)",
+              "score": 0.5699
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.5672
+            }
+          ]
+        },
+        {
+          "videoId": "fight (7)",
+          "durationSeconds": 11,
+          "frames": 109,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.633,
+          "rightHandCoverage": 0.3486,
+          "bothHandsCoverage": 0.2936,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7186,
+          "leaveOneOutScore": 0.574,
+          "selfInclusionGap": 0.1446,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (2)",
+              "score": 0.5845
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.5713
+            },
+            {
+              "videoId": "fight (1)",
+              "score": 0.5661
+            }
+          ]
+        },
+        {
+          "videoId": "fight (1)",
+          "durationSeconds": 11,
+          "frames": 110,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.7,
+          "rightHandCoverage": 0.4636,
+          "bothHandsCoverage": 0.3727,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7361,
+          "leaveOneOutScore": 0.5981,
+          "selfInclusionGap": 0.138,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (2)",
+              "score": 0.6149
+            },
+            {
+              "videoId": "fight (8)",
+              "score": 0.5935
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.5858
+            }
+          ]
+        },
+        {
+          "videoId": "fight (10)",
+          "durationSeconds": 11.866,
+          "frames": 119,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.7227,
+          "rightHandCoverage": 0.3361,
+          "bothHandsCoverage": 0.2521,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7386,
+          "leaveOneOutScore": 0.5992,
+          "selfInclusionGap": 0.1394,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (3)",
+              "score": 0.6096
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.6061
+            },
+            {
+              "videoId": "fight (2)",
+              "score": 0.5818
+            }
+          ]
+        },
+        {
+          "videoId": "fight (5)",
+          "durationSeconds": 10.6,
+          "frames": 106,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.934,
+          "rightHandCoverage": 0.6792,
+          "bothHandsCoverage": 0.6415,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7455,
+          "leaveOneOutScore": 0.6142,
+          "selfInclusionGap": 0.1313,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (2)",
+              "score": 0.6297
+            },
+            {
+              "videoId": "fight (3)",
+              "score": 0.6068
+            },
+            {
+              "videoId": "fight (10)",
+              "score": 0.6061
+            }
+          ]
+        },
+        {
+          "videoId": "fight (3)",
+          "durationSeconds": 12,
+          "frames": 120,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.625,
+          "rightHandCoverage": 0.475,
+          "bothHandsCoverage": 0.375,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7531,
+          "leaveOneOutScore": 0.622,
+          "selfInclusionGap": 0.1311,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (2)",
+              "score": 0.6497
+            },
+            {
+              "videoId": "fight (10)",
+              "score": 0.6096
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.6068
+            }
+          ]
+        },
+        {
+          "videoId": "fight (2)",
+          "durationSeconds": 10.8,
+          "frames": 108,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.9259,
+          "rightHandCoverage": 0.5648,
+          "bothHandsCoverage": 0.5278,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7598,
+          "leaveOneOutScore": 0.6314,
+          "selfInclusionGap": 0.1284,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (3)",
+              "score": 0.6497
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.6297
+            },
+            {
+              "videoId": "fight (1)",
+              "score": 0.6149
+            }
+          ]
+        },
+        {
+          "videoId": "fight (4)",
+          "durationSeconds": 11.9,
+          "frames": 119,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.8655,
+          "rightHandCoverage": 0.4958,
+          "bothHandsCoverage": 0.4454,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.864,
+          "leaveOneOutScore": 0.7278,
+          "selfInclusionGap": 0.1362,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (6)",
+              "score": 1
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.592
+            },
+            {
+              "videoId": "fight (3)",
+              "score": 0.5914
+            }
+          ]
+        },
+        {
+          "videoId": "fight (6)",
+          "durationSeconds": 11.9,
+          "frames": 119,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.8655,
+          "rightHandCoverage": 0.4958,
+          "bothHandsCoverage": 0.4454,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.864,
+          "leaveOneOutScore": 0.7278,
+          "selfInclusionGap": 0.1362,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "fight (4)",
+              "score": 1
+            },
+            {
+              "videoId": "fight (5)",
+              "score": 0.592
+            },
+            {
+              "videoId": "fight (3)",
+              "score": 0.5914
+            }
+          ]
+        }
+      ],
+      "hardestNegativeControls": [
+        {
+          "datasetId": "fade",
+          "videoId": "fade (6)",
+          "score": 0.6295,
+          "durationSeconds": 10.033
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (7)",
+          "score": 0.6192,
+          "durationSeconds": 9.867
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (8)",
+          "score": 0.6119,
+          "durationSeconds": 9.967
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (4)",
+          "score": 0.5967,
+          "durationSeconds": 9.633
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (2)",
+          "score": 0.5899,
+          "durationSeconds": 9.933
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (2)",
+          "score": 0.5824,
+          "durationSeconds": 9.867
+        },
+        {
+          "datasetId": "indo",
+          "videoId": "indo (7)",
+          "score": 0.5807,
+          "durationSeconds": 10.267
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (4)",
+          "score": 0.5685,
+          "durationSeconds": 10.267
+        }
+      ]
+    },
+    {
+      "datasetId": "indo",
+      "threshold": 0.6587,
+      "summary": {
+        "meanTrainIncludedScore": 0.7719,
+        "meanLeaveOneOutScore": 0.6503,
+        "meanSelfInclusionGap": 0.1216,
+        "durationSeconds": {
+          "count": 10,
+          "min": 9.2,
+          "p25": 9.4413,
+          "median": 9.5,
+          "mean": 9.5833,
+          "p75": 9.6585,
+          "max": 10.267
+        },
+        "belowThresholdVideos": [
+          "indo (3)",
+          "indo (9)",
+          "indo (10)",
+          "indo (8)",
+          "indo (7)",
+          "indo (1)",
+          "indo (6)"
+        ]
+      },
+      "videos": [
+        {
+          "videoId": "indo (3)",
+          "durationSeconds": 9.466,
+          "frames": 95,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.7579,
+          "rightHandCoverage": 0.4421,
+          "bothHandsCoverage": 0.3684,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7526,
+          "leaveOneOutScore": 0.6224,
+          "selfInclusionGap": 0.1302,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (4)",
+              "score": 0.6333
+            },
+            {
+              "videoId": "indo (2)",
+              "score": 0.6245
+            },
+            {
+              "videoId": "indo (10)",
+              "score": 0.6095
+            }
+          ]
+        },
+        {
+          "videoId": "indo (9)",
+          "durationSeconds": 9.533,
+          "frames": 96,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.9167,
+          "rightHandCoverage": 0.6458,
+          "bothHandsCoverage": 0.6146,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7695,
+          "leaveOneOutScore": 0.6429,
+          "selfInclusionGap": 0.1266,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (5)",
+              "score": 0.6806
+            },
+            {
+              "videoId": "indo (4)",
+              "score": 0.628
+            },
+            {
+              "videoId": "indo (6)",
+              "score": 0.62
+            }
+          ]
+        },
+        {
+          "videoId": "indo (10)",
+          "durationSeconds": 9.2,
+          "frames": 92,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4565,
+          "rightHandCoverage": 0.3261,
+          "bothHandsCoverage": 0.1413,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7656,
+          "leaveOneOutScore": 0.6439,
+          "selfInclusionGap": 0.1217,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (1)",
+              "score": 0.6503
+            },
+            {
+              "videoId": "indo (8)",
+              "score": 0.6465
+            },
+            {
+              "videoId": "indo (4)",
+              "score": 0.6349
+            }
+          ]
+        },
+        {
+          "videoId": "indo (8)",
+          "durationSeconds": 9.3,
+          "frames": 93,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.8925,
+          "rightHandCoverage": 0.5269,
+          "bothHandsCoverage": 0.5054,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7685,
+          "leaveOneOutScore": 0.644,
+          "selfInclusionGap": 0.1245,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (1)",
+              "score": 0.6591
+            },
+            {
+              "videoId": "indo (10)",
+              "score": 0.6465
+            },
+            {
+              "videoId": "indo (4)",
+              "score": 0.6266
+            }
+          ]
+        },
+        {
+          "videoId": "indo (7)",
+          "durationSeconds": 10.267,
+          "frames": 103,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6602,
+          "rightHandCoverage": 0.5049,
+          "bothHandsCoverage": 0.4175,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7648,
+          "leaveOneOutScore": 0.6456,
+          "selfInclusionGap": 0.1192,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (4)",
+              "score": 0.6515
+            },
+            {
+              "videoId": "indo (5)",
+              "score": 0.6431
+            },
+            {
+              "videoId": "indo (2)",
+              "score": 0.6422
+            }
+          ]
+        },
+        {
+          "videoId": "indo (1)",
+          "durationSeconds": 9.467,
+          "frames": 95,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.9368,
+          "rightHandCoverage": 0.5263,
+          "bothHandsCoverage": 0.5263,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7698,
+          "leaveOneOutScore": 0.6494,
+          "selfInclusionGap": 0.1204,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (8)",
+              "score": 0.6591
+            },
+            {
+              "videoId": "indo (10)",
+              "score": 0.6503
+            },
+            {
+              "videoId": "indo (4)",
+              "score": 0.6388
+            }
+          ]
+        },
+        {
+          "videoId": "indo (6)",
+          "durationSeconds": 9.667,
+          "frames": 97,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.8969,
+          "rightHandCoverage": 0.701,
+          "bothHandsCoverage": 0.6392,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7722,
+          "leaveOneOutScore": 0.6497,
+          "selfInclusionGap": 0.1225,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (2)",
+              "score": 0.6655
+            },
+            {
+              "videoId": "indo (4)",
+              "score": 0.6512
+            },
+            {
+              "videoId": "indo (5)",
+              "score": 0.6324
+            }
+          ]
+        },
+        {
+          "videoId": "indo (5)",
+          "durationSeconds": 9.433,
+          "frames": 95,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.9053,
+          "rightHandCoverage": 0.6316,
+          "bothHandsCoverage": 0.6,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7832,
+          "leaveOneOutScore": 0.6659,
+          "selfInclusionGap": 0.1173,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (9)",
+              "score": 0.6806
+            },
+            {
+              "videoId": "indo (4)",
+              "score": 0.6689
+            },
+            {
+              "videoId": "indo (2)",
+              "score": 0.6481
+            }
+          ]
+        },
+        {
+          "videoId": "indo (2)",
+          "durationSeconds": 9.867,
+          "frames": 99,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.798,
+          "rightHandCoverage": 0.4747,
+          "bothHandsCoverage": 0.3232,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7856,
+          "leaveOneOutScore": 0.6683,
+          "selfInclusionGap": 0.1173,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (4)",
+              "score": 0.6914
+            },
+            {
+              "videoId": "indo (6)",
+              "score": 0.6655
+            },
+            {
+              "videoId": "indo (5)",
+              "score": 0.6481
+            }
+          ]
+        },
+        {
+          "videoId": "indo (4)",
+          "durationSeconds": 9.633,
+          "frames": 97,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.9278,
+          "rightHandCoverage": 0.9485,
+          "bothHandsCoverage": 0.8866,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7868,
+          "leaveOneOutScore": 0.6706,
+          "selfInclusionGap": 0.1162,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "indo (2)",
+              "score": 0.6914
+            },
+            {
+              "videoId": "indo (5)",
+              "score": 0.6689
+            },
+            {
+              "videoId": "indo (7)",
+              "score": 0.6515
+            }
+          ]
+        }
+      ],
+      "hardestNegativeControls": [
+        {
+          "datasetId": "fade",
+          "videoId": "fade (6)",
+          "score": 0.6918,
+          "durationSeconds": 10.033
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (7)",
+          "score": 0.6849,
+          "durationSeconds": 9.867
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (2)",
+          "score": 0.6515,
+          "durationSeconds": 9.933
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (8)",
+          "score": 0.6506,
+          "durationSeconds": 9.967
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (5)",
+          "score": 0.6187,
+          "durationSeconds": 9.966
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (3)",
+          "score": 0.6062,
+          "durationSeconds": 10.3
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (4)",
+          "score": 0.6034,
+          "durationSeconds": 10.267
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (10)",
+          "score": 0.5991,
+          "durationSeconds": 10.333
+        }
+      ]
+    },
+    {
+      "datasetId": "no",
+      "threshold": 0.5842,
+      "summary": {
+        "meanTrainIncludedScore": 0.7398,
+        "meanLeaveOneOutScore": 0.6019,
+        "meanSelfInclusionGap": 0.1378,
+        "durationSeconds": {
+          "count": 10,
+          "min": 15.467,
+          "p25": 15.6167,
+          "median": 15.8835,
+          "mean": 15.9567,
+          "p75": 15.933,
+          "max": 17.467
+        },
+        "belowThresholdVideos": [
+          "no (5)",
+          "no (1)"
+        ]
+      },
+      "videos": [
+        {
+          "videoId": "no (5)",
+          "durationSeconds": 15.667,
+          "frames": 157,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.3121,
+          "rightHandCoverage": 0.4076,
+          "bothHandsCoverage": 0.1656,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.705,
+          "leaveOneOutScore": 0.5515,
+          "selfInclusionGap": 0.1535,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (1)",
+              "score": 0.5705
+            },
+            {
+              "videoId": "no (4)",
+              "score": 0.5445
+            },
+            {
+              "videoId": "no (10)",
+              "score": 0.5396
+            }
+          ]
+        },
+        {
+          "videoId": "no (1)",
+          "durationSeconds": 15.867,
+          "frames": 159,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4906,
+          "rightHandCoverage": 0.2201,
+          "bothHandsCoverage": 0.1509,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7122,
+          "leaveOneOutScore": 0.5653,
+          "selfInclusionGap": 0.1469,
+          "passesLeaveOneOutThreshold": false,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (5)",
+              "score": 0.5705
+            },
+            {
+              "videoId": "no (6)",
+              "score": 0.566
+            },
+            {
+              "videoId": "no (7)",
+              "score": 0.5593
+            }
+          ]
+        },
+        {
+          "videoId": "no (9)",
+          "durationSeconds": 17.467,
+          "frames": 158,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.5316,
+          "rightHandCoverage": 0.3418,
+          "bothHandsCoverage": 0.2152,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7292,
+          "leaveOneOutScore": 0.5875,
+          "selfInclusionGap": 0.1417,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (10)",
+              "score": 0.6082
+            },
+            {
+              "videoId": "no (8)",
+              "score": 0.5793
+            },
+            {
+              "videoId": "no (2)",
+              "score": 0.575
+            }
+          ]
+        },
+        {
+          "videoId": "no (3)",
+          "durationSeconds": 15.933,
+          "frames": 160,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.3688,
+          "rightHandCoverage": 0.2,
+          "bothHandsCoverage": 0.1,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7288,
+          "leaveOneOutScore": 0.5879,
+          "selfInclusionGap": 0.1409,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (7)",
+              "score": 0.6021
+            },
+            {
+              "videoId": "no (8)",
+              "score": 0.5843
+            },
+            {
+              "videoId": "no (4)",
+              "score": 0.5773
+            }
+          ]
+        },
+        {
+          "videoId": "no (10)",
+          "durationSeconds": 16.2,
+          "frames": 162,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.321,
+          "rightHandCoverage": 0.1296,
+          "bothHandsCoverage": 0.0679,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7415,
+          "leaveOneOutScore": 0.6024,
+          "selfInclusionGap": 0.1391,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (8)",
+              "score": 0.6164
+            },
+            {
+              "videoId": "no (9)",
+              "score": 0.6082
+            },
+            {
+              "videoId": "no (2)",
+              "score": 0.5827
+            }
+          ]
+        },
+        {
+          "videoId": "no (4)",
+          "durationSeconds": 15.933,
+          "frames": 160,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4625,
+          "rightHandCoverage": 0.6062,
+          "bothHandsCoverage": 0.3812,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7393,
+          "leaveOneOutScore": 0.6042,
+          "selfInclusionGap": 0.1351,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (2)",
+              "score": 0.6187
+            },
+            {
+              "videoId": "no (6)",
+              "score": 0.5991
+            },
+            {
+              "videoId": "no (7)",
+              "score": 0.5947
+            }
+          ]
+        },
+        {
+          "videoId": "no (7)",
+          "durationSeconds": 15.9,
+          "frames": 157,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.3376,
+          "rightHandCoverage": 0.3248,
+          "bothHandsCoverage": 0.1338,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7429,
+          "leaveOneOutScore": 0.6078,
+          "selfInclusionGap": 0.1351,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (2)",
+              "score": 0.6267
+            },
+            {
+              "videoId": "no (3)",
+              "score": 0.6021
+            },
+            {
+              "videoId": "no (4)",
+              "score": 0.5947
+            }
+          ]
+        },
+        {
+          "videoId": "no (6)",
+          "durationSeconds": 15.533,
+          "frames": 156,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.4808,
+          "rightHandCoverage": 0.4295,
+          "bothHandsCoverage": 0.2436,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7658,
+          "leaveOneOutScore": 0.6321,
+          "selfInclusionGap": 0.1337,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (8)",
+              "score": 0.6527
+            },
+            {
+              "videoId": "no (2)",
+              "score": 0.6446
+            },
+            {
+              "videoId": "no (4)",
+              "score": 0.5991
+            }
+          ]
+        },
+        {
+          "videoId": "no (8)",
+          "durationSeconds": 15.6,
+          "frames": 156,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.609,
+          "rightHandCoverage": 0.5064,
+          "bothHandsCoverage": 0.3333,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7679,
+          "leaveOneOutScore": 0.64,
+          "selfInclusionGap": 0.1279,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (6)",
+              "score": 0.6527
+            },
+            {
+              "videoId": "no (2)",
+              "score": 0.6509
+            },
+            {
+              "videoId": "no (10)",
+              "score": 0.6164
+            }
+          ]
+        },
+        {
+          "videoId": "no (2)",
+          "durationSeconds": 15.467,
+          "frames": 155,
+          "poseCoverage": 1,
+          "leftHandCoverage": 0.6194,
+          "rightHandCoverage": 0.4903,
+          "bothHandsCoverage": 0.3548,
+          "directSelfScore": 1,
+          "trainIncludedScore": 0.7652,
+          "leaveOneOutScore": 0.6407,
+          "selfInclusionGap": 0.1245,
+          "passesLeaveOneOutThreshold": true,
+          "threeClosestOtherVideos": [
+            {
+              "videoId": "no (8)",
+              "score": 0.6509
+            },
+            {
+              "videoId": "no (6)",
+              "score": 0.6446
+            },
+            {
+              "videoId": "no (7)",
+              "score": 0.6267
+            }
+          ]
+        }
+      ],
+      "hardestNegativeControls": [
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (7)",
+          "score": 0.6078,
+          "durationSeconds": 16.333
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (10)",
+          "score": 0.5836,
+          "durationSeconds": 17.033
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (6)",
+          "score": 0.5809,
+          "durationSeconds": 10.033
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (3)",
+          "score": 0.5793,
+          "durationSeconds": 17.467
+        },
+        {
+          "datasetId": "fade",
+          "videoId": "fade (7)",
+          "score": 0.5789,
+          "durationSeconds": 9.867
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (9)",
+          "score": 0.5783,
+          "durationSeconds": 16
+        },
+        {
+          "datasetId": "cloud",
+          "videoId": "cloud (2)",
+          "score": 0.5753,
+          "durationSeconds": 17.533
+        },
+        {
+          "datasetId": "cat",
+          "videoId": "cat (9)",
+          "score": 0.5737,
+          "durationSeconds": 18.4
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Cross-class videos are proxy negatives, not examples of a learner performing the right gesture incorrectly.",
+    "All source videos are reference-quality examples, so this validates discrimination and consistency, not agreement with human quality ratings.",
+    "Each class has only ten positive videos; thresholds are exploratory and require confirmation on a separate user test set."
+  ]
+}
