@@ -8,8 +8,8 @@ export const ACTION_NAVIGATION_VOICE_COMMANDS = {
   START_EVALUATION: ['我学会了', '学会了', '会了', '开始评估', '进入评估', '开始测试', '开始考核', '可以评估了', '来评估吧'],
   SKIP_TO_OVERVIEW: ['先跳过', '跳过这个', '回主界面', '回到主界面', '返回主界面'],
   RETRY_PRACTICE: ['再练一遍', '重新练习', '回到训练', '继续训练', '重新教学'],
-  SHOW_SKELETON: ['显示骨骼', '打开骨骼'],
-  HIDE_SKELETON: ['隐藏骨骼', '关闭骨骼'],
+  SHOW_SKELETON: ['显示骨骼', '显示骨架', '打开骨骼', '打开骨架'],
+  HIDE_SKELETON: ['隐藏骨骼', '隐藏骨架', '关闭骨骼', '关闭骨架'],
 } as const;
 
 const actionNavigationCommandValues = Object.values(

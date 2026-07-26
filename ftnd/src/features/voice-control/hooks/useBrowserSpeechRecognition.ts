@@ -13,7 +13,6 @@ import {
   IMMEDIATE_COMMAND_RESET_DELAY_MS,
   normalizeVoiceTranscript,
 } from "../immediateVoiceCommands";
-import { extractVoiceWakeWordPayload } from "../wakeWords";
 
 interface BrowserSpeechRecognitionAlternative {
   transcript: string;
@@ -70,7 +69,6 @@ interface UseBrowserSpeechRecognitionOptions {
 
 const INTERIM_FINALIZE_DELAY_MS = 900;
 const DUPLICATE_TRANSCRIPT_WINDOW_MS = 900;
-const WAKE_COMMAND_WINDOW_MS = 8000;
 
 const speechErrorMessages: Record<string, string> = {
   "not-allowed": "麦克风权限被拒绝，请在浏览器中允许麦克风访问。",
@@ -91,8 +89,6 @@ export function useBrowserSpeechRecognition({
   const interimFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const wakeWindowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isAwakeRef = useRef(false);
   const commandResetPendingRef = useRef(false);
   const ignoreResultsRef = useRef(false);
   const lastInterimRef = useRef("");
@@ -101,8 +97,6 @@ export function useBrowserSpeechRecognition({
   const lastDispatchedRef = useRef({ transcript: "", at: 0 });
   const [isSupported, setIsSupported] = useState(true);
   const [isListening, setIsListening] = useState(false);
-  const [isAwake, setIsAwake] = useState(false);
-  const [wakeDebugTranscript, setWakeDebugTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [error, setError] = useState("");
 
@@ -126,34 +120,7 @@ export function useBrowserSpeechRecognition({
       }
     };
 
-    const clearWakeWindowTimer = () => {
-      if (wakeWindowTimerRef.current) {
-        clearTimeout(wakeWindowTimerRef.current);
-        wakeWindowTimerRef.current = null;
-      }
-    };
-
-    const returnToWakeWaiting = () => {
-      clearWakeWindowTimer();
-      isAwakeRef.current = false;
-      lastInterimRef.current = "";
-      setIsAwake(false);
-      setInterimTranscript("");
-      clearInterimFinalizeTimer();
-    };
-
-    const activateWakeWindow = () => {
-      clearWakeWindowTimer();
-      isAwakeRef.current = true;
-      setIsAwake(true);
-      wakeWindowTimerRef.current = setTimeout(
-        returnToWakeWaiting,
-        WAKE_COMMAND_WINDOW_MS,
-      );
-    };
-
     const resetRecognitionAfterDispatch = () => {
-      returnToWakeWaiting();
       commandResetPendingRef.current = true;
       lastDispatchedRef.current = { transcript: "", at: 0 };
       setInterimTranscript("");
@@ -206,48 +173,9 @@ export function useBrowserSpeechRecognition({
         }
       }
 
-      let activeInterim = interim;
-      let finalTranscript = finalParts.join("，");
-      const interimWakeMatch = extractVoiceWakeWordPayload(activeInterim);
-      const finalWakeMatch = extractVoiceWakeWordPayload(finalTranscript);
-      const hasWakeWord = interimWakeMatch.matched || finalWakeMatch.matched;
-      const wasAwake = isAwakeRef.current;
-      const wakeCandidate = [finalTranscript, activeInterim]
-        .filter(Boolean)
-        .join("，")
-        .trim();
-
-      if (!wasAwake && !hasWakeWord) {
-        setWakeDebugTranscript(wakeCandidate);
-        if (wakeCandidate && process.env.NODE_ENV !== "production") {
-          console.debug("[早上好 wake] 未命中唤醒词", wakeCandidate);
-        }
-        lastInterimRef.current = "";
-        setInterimTranscript("");
-        clearInterimFinalizeTimer();
-        return;
-      }
-
-      if (hasWakeWord) {
-        setWakeDebugTranscript("");
-        if (process.env.NODE_ENV !== "production") {
-          console.debug("[早上好 wake] 已唤醒", wakeCandidate);
-        }
-      }
-      if (hasWakeWord || wasAwake) activateWakeWindow();
-      if (interimWakeMatch.matched) {
-        activeInterim = interimWakeMatch.payload;
-        if (!wasAwake) finalTranscript = "";
-      }
-      if (finalWakeMatch.matched) finalTranscript = finalWakeMatch.payload;
-      setInterimTranscript(activeInterim);
-
-      if (!activeInterim && !finalTranscript) return;
-
+      setInterimTranscript(interim);
       const now = Date.now();
-      const immediateCommand = extractImmediateVoiceCommand(
-        activeInterim || finalTranscript,
-      );
+      const immediateCommand = extractImmediateVoiceCommand(interim);
       if (
         immediateCommand &&
         canDispatchAfterCooldown(now, commandBlockedUntilRef.current)
@@ -260,15 +188,15 @@ export function useBrowserSpeechRecognition({
         return;
       }
 
-      if (activeInterim) {
-        if (activeInterim !== lastInterimRef.current) {
-          lastInterimRef.current = activeInterim;
+      if (interim) {
+        if (interim !== lastInterimRef.current) {
+          lastInterimRef.current = interim;
           if (interimFinalizeTimerRef.current) {
             clearTimeout(interimFinalizeTimerRef.current);
           }
           interimFinalizeTimerRef.current = setTimeout(() => {
             interimFinalizeTimerRef.current = null;
-            dispatchTranscriptAndReset(activeInterim);
+            dispatchTranscriptAndReset(interim);
           }, INTERIM_FINALIZE_DELAY_MS);
         }
       } else {
@@ -276,6 +204,7 @@ export function useBrowserSpeechRecognition({
         clearInterimFinalizeTimer();
       }
 
+      const finalTranscript = finalParts.join("，");
       if (finalTranscript) {
         lastInterimRef.current = "";
         clearInterimFinalizeTimer();
@@ -301,13 +230,10 @@ export function useBrowserSpeechRecognition({
       commandResetPendingRef.current = false;
       isStartingRef.current = false;
       isListeningRef.current = false;
-      if (!keepListeningRef.current) {
+      if (!isCommandReset) {
         setIsListening(false);
-        return;
       }
-      // Keep the logical listening state active while Chrome rotates its
-      // recognition session, so autoListen cannot erase a fresh wake window.
-      setIsListening(true);
+      if (!keepListeningRef.current) return;
 
       restartTimerRef.current = setTimeout(() => {
         if (isStartingRef.current || isListeningRef.current) return;
@@ -335,7 +261,6 @@ export function useBrowserSpeechRecognition({
       isStartingRef.current = false;
       isListeningRef.current = false;
       clearInterimFinalizeTimer();
-      clearWakeWindowTimer();
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
       recognition.abort();
       recognitionRef.current = null;
@@ -362,9 +287,6 @@ export function useBrowserSpeechRecognition({
 
     keepListeningRef.current = true;
     ignoreResultsRef.current = false;
-    isAwakeRef.current = false;
-    setIsAwake(false);
-    setWakeDebugTranscript("");
     isStartingRef.current = true;
     setError("");
     try {
@@ -387,9 +309,6 @@ export function useBrowserSpeechRecognition({
   const stopListening = useCallback(() => {
     keepListeningRef.current = false;
     ignoreResultsRef.current = true;
-    isAwakeRef.current = false;
-    setIsAwake(false);
-    setWakeDebugTranscript("");
     isStartingRef.current = false;
     isListeningRef.current = false;
     commandResetPendingRef.current = false;
@@ -403,10 +322,6 @@ export function useBrowserSpeechRecognition({
       clearTimeout(interimFinalizeTimerRef.current);
       interimFinalizeTimerRef.current = null;
     }
-    if (wakeWindowTimerRef.current) {
-      clearTimeout(wakeWindowTimerRef.current);
-      wakeWindowTimerRef.current = null;
-    }
     recognitionRef.current?.abort();
     setIsListening(false);
     setInterimTranscript("");
@@ -415,8 +330,6 @@ export function useBrowserSpeechRecognition({
   return {
     isSupported,
     isListening,
-    isAwake,
-    wakeDebugTranscript,
     interimTranscript,
     error,
     startListening,
