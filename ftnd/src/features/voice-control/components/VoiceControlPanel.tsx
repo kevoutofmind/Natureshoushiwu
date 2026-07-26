@@ -13,7 +13,8 @@ import {
   Typography,
 } from "@mui/material";
 import { interpretVoiceCommand } from "../api";
-import { useBrowserSpeechRecognition } from "../hooks/useBrowserSpeechRecognition";
+import { useWhisperSpeechRecognition } from "../hooks/useWhisperSpeechRecognition";
+import { resolveLumiWakeTurn } from "../lumiWakeWord";
 import type { VoiceCommandResult } from "../types";
 
 import { matchActionNavigationVoiceIntent } from '../immediateVoiceCommands';
@@ -27,16 +28,37 @@ export default function VoiceControlPanel({
   autoListen = false,
   onCommandRecognized,
 }: VoiceControlPanelProps) {
-  const autoStartedRef = useRef(false);
+  const startedAutomaticallyRef = useRef(false);
+  const wakeWindowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isAwakeRef = useRef(false);
   const requestQueueRef = useRef(Promise.resolve());
   const pendingRequestCountRef = useRef(0);
   const [manuallyPaused, setManuallyPaused] = useState(false);
+  const [isAwake, setIsAwake] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [lastResult, setLastResult] = useState<VoiceCommandResult | null>(null);
   const [requestError, setRequestError] = useState("");
 
-  const processTranscript = useCallback(
+  const returnToStandby = useCallback(() => {
+    isAwakeRef.current = false;
+    setIsAwake(false);
+    if (wakeWindowTimerRef.current) {
+      clearTimeout(wakeWindowTimerRef.current);
+      wakeWindowTimerRef.current = null;
+    }
+  }, []);
+
+  const activateLumi = useCallback(() => {
+    isAwakeRef.current = true;
+    setIsAwake(true);
+    if (wakeWindowTimerRef.current) {
+      clearTimeout(wakeWindowTimerRef.current);
+    }
+    wakeWindowTimerRef.current = setTimeout(returnToStandby, 10000);
+  }, [returnToStandby]);
+
+  const executeTranscript = useCallback(
     async (transcript: string) => {
       const trimmedTranscript = transcript.trim();
       if (!trimmedTranscript) return;
@@ -61,6 +83,7 @@ export default function VoiceControlPanel({
         setRequestError('');
         setLastResult(localResult);
         onCommandRecognized?.(localResult);
+        returnToStandby();
         return;
       }
       pendingRequestCountRef.current += 1;
@@ -86,12 +109,45 @@ export default function VoiceControlPanel({
               pendingRequestCountRef.current - 1,
             );
             setProcessing(pendingRequestCountRef.current > 0);
+            returnToStandby();
           }
         });
 
       await requestQueueRef.current;
     },
-    [onCommandRecognized],
+    [onCommandRecognized, returnToStandby],
+  );
+
+  const processTranscript = useCallback(
+    async (transcript: string) => {
+      const decision = resolveLumiWakeTurn(
+        transcript,
+        isAwakeRef.current,
+      );
+      if (decision.type === "standby") return;
+      if (decision.type === "wake") {
+        activateLumi();
+        setLastTranscript("Lumi");
+        setLastResult({
+          accepted: true,
+          command: {
+            transcript: "Lumi",
+            normalizedTranscript: "lumi",
+            intent: null,
+            confidence: 1,
+            parameters: {},
+          },
+          label: "Lumi 已唤醒",
+          responseText: "我在，请说出你的需求。",
+          executionStatus: "not-dispatched",
+        });
+        return;
+      }
+
+      returnToStandby();
+      await executeTranscript(decision.commandText);
+    },
+    [activateLumi, executeTranscript, returnToStandby],
   );
 
   const {
@@ -101,7 +157,7 @@ export default function VoiceControlPanel({
     error: recognitionError,
     startListening,
     stopListening,
-  } = useBrowserSpeechRecognition({
+  } = useWhisperSpeechRecognition({
     onFinalTranscript: processTranscript,
   });
 
@@ -111,29 +167,40 @@ export default function VoiceControlPanel({
       !manuallyPaused &&
       isSupported &&
       !isListening &&
-      !processing
+      !recognitionError
     ) {
-      autoStartedRef.current = true;
-      startListening();
+      startedAutomaticallyRef.current = true;
+      void startListening();
       return;
     }
-    if (!autoListen) {
-      if (autoStartedRef.current) {
-        autoStartedRef.current = false;
-        stopListening();
-      }
+    if (!autoListen && startedAutomaticallyRef.current) {
+      startedAutomaticallyRef.current = false;
+      stopListening();
+      returnToStandby();
     }
   }, [
     autoListen,
     isListening,
     isSupported,
     manuallyPaused,
-    processing,
+    recognitionError,
+    returnToStandby,
     startListening,
     stopListening,
   ]);
 
-  const hasTranscript = Boolean(interimTranscript || lastTranscript);
+  useEffect(
+    () => () => {
+      if (wakeWindowTimerRef.current) {
+        clearTimeout(wakeWindowTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const hasTranscript = Boolean(
+    lastTranscript || (isAwake && interimTranscript),
+  );
   const showStatusPanel =
     !isSupported ||
     Boolean(recognitionError) ||
@@ -158,14 +225,18 @@ export default function VoiceControlPanel({
               )
             }
             onClick={() => {
-              autoStartedRef.current = false;
+              startedAutomaticallyRef.current = false;
               setManuallyPaused(false);
-              if (!isListening) startListening();
+              if (!isListening) void startListening();
             }}
             disabled={!isSupported || processing}
             className="voice-input-button"
           >
-            {isListening ? "正在持续监听" : "开启语音控制"}
+            {isListening
+              ? isAwake
+                ? "Lumi 已唤醒，正在聆听"
+                : "Lumi 待机中"
+              : "开启 Lumi 实时监听"}
           </Button>
 
           {isListening && (
@@ -174,9 +245,10 @@ export default function VoiceControlPanel({
               color="secondary"
               startIcon={<StopCircleRoundedIcon />}
               onClick={() => {
-                autoStartedRef.current = false;
+                startedAutomaticallyRef.current = false;
                 setManuallyPaused(true);
                 stopListening();
+                returnToStandby();
               }}
               sx={{ flexShrink: 0 }}
             >
@@ -189,7 +261,7 @@ export default function VoiceControlPanel({
           <Stack gap={1}>
             {!isSupported && (
               <Alert severity="warning">
-                当前浏览器不支持语音识别，请使用最新版 Chrome 或 Edge。
+                当前浏览器不支持麦克风录音，请使用最新版 Chrome 或 Edge。
               </Alert>
             )}
 
@@ -209,12 +281,14 @@ export default function VoiceControlPanel({
                 }}
               >
                 <Typography variant="caption" color="text.secondary">
-                  识别文字
+                  {isAwake ? "Lumi 已唤醒" : "Lumi 待机监听"}
                 </Typography>
                 <Typography mt={0.5} fontWeight={750}>
-                  {interimTranscript ||
-                    lastTranscript ||
-                    "请直接说出指令，例如：慢一点"}
+                  {isAwake
+                    ? interimTranscript ||
+                      lastTranscript ||
+                      "我在，请说出你的需求。"
+                    : '待机中，请说“Lumi”唤醒'}
                 </Typography>
               </Box>
             )}
@@ -267,6 +341,10 @@ function actionNavigationResponse(intent: VoiceCommandResult['command']['intent'
       return '好的，回到主界面。';
     case 'RETRY_PRACTICE':
       return '好的，我们从训练再来一遍。';
+    case 'SHOW_SKELETON':
+      return '好的，已显示骨架。';
+    case 'HIDE_SKELETON':
+      return '好的，已关闭骨架。';
     default:
       return '好的，继续练习。';
   }
