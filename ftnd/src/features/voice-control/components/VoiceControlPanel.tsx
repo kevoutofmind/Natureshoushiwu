@@ -286,6 +286,10 @@ function actionNavigationResponse(intent: VoiceCommandResult['command']['intent'
       return '好的，回到主界面。';
     case 'RETRY_PRACTICE':
       return '好的，我们从训练再来一遍。';
+    case 'SHOW_SKELETON':
+      return '好的，显示骨骼。';
+    case 'HIDE_SKELETON':
+      return '好的，隐藏骨骼。';
     default:
       return '好的，继续练习。';
   }

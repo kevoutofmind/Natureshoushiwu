@@ -12,6 +12,7 @@ interface MotionPreview {
 
 interface MotionPreviewSequenceProps {
   videoUrl: string;
+  clipUrls?: string[];
   motions?: MotionPreview[];
   activeMotionIndex?: number | null;
   onSelectMotion?: (motionIndex: number) => void;
@@ -21,6 +22,7 @@ interface MotionPreviewSequenceProps {
 
 export default function MotionPreviewSequence({
   videoUrl,
+  clipUrls = [],
   motions = [],
   activeMotionIndex = null,
   onSelectMotion,
@@ -38,7 +40,7 @@ export default function MotionPreviewSequence({
   );
 
   useEffect(() => {
-    if (!videoUrl) {
+    if (!videoUrl && clipUrls.length === 0) {
       return;
     }
 
@@ -47,33 +49,42 @@ export default function MotionPreviewSequence({
     video.muted = true;
     video.playsInline = true;
     video.preload = "auto";
-    video.src = videoUrl;
-
-    const captureFrames = async () => {
+    const loadFrame = async (src: string, timeSeconds: number) => {
       await new Promise<void>((resolve, reject) => {
         video.addEventListener("loadedmetadata", () => resolve(), { once: true });
         video.addEventListener("error", () => reject(), { once: true });
+        video.src = src;
         video.load();
       }).catch(() => undefined);
-      if (cancelled || !video.videoWidth) return;
+      if (cancelled || !video.videoWidth) return null;
 
+      const frameTime = Math.min(
+        Math.max(0, timeSeconds),
+        Math.max(0, video.duration - 0.08),
+      );
+      await new Promise<void>((resolve) => {
+        video.currentTime = Number.isFinite(frameTime) ? frameTime : 0;
+        video.addEventListener("seeked", () => resolve(), { once: true });
+      });
+      if (cancelled) return null;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.82);
+    };
+
+    const captureFrames = async () => {
       const captured: string[] = [];
-      for (const motion of previewMotions) {
-        const frameTime = Math.min(
-          Math.max(0, motion.startMs / 1000 + 0.18),
-          Math.max(0, video.duration - 0.08),
+      for (const [index, motion] of previewMotions.entries()) {
+        const clipUrl = clipUrls[index];
+        const frame = await loadFrame(
+          clipUrl ?? videoUrl,
+          clipUrl ? 0.18 : motion.startMs / 1000 + 0.18,
         );
-        await new Promise<void>((resolve) => {
-          video.currentTime = Number.isFinite(frameTime) ? frameTime : 0;
-          video.addEventListener("seeked", () => resolve(), { once: true });
-        });
         if (cancelled) return;
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const context = canvas.getContext("2d");
-        context?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        captured.push(canvas.toDataURL("image/jpeg", 0.82));
+        if (frame) captured.push(frame);
       }
       if (!cancelled) setFrames(captured);
     };
@@ -85,7 +96,7 @@ export default function MotionPreviewSequence({
       video.removeAttribute("src");
       video.load();
     };
-  }, [previewMotions, videoUrl]);
+  }, [clipUrls, previewMotions, videoUrl]);
 
   const cards = previewMotions.map((motion, index) => (
     <figure

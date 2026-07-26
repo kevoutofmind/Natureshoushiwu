@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CameraswitchRoundedIcon from "@mui/icons-material/CameraswitchRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
 import PauseCircleOutlineRoundedIcon from "@mui/icons-material/PauseCircleOutlineRounded";
+import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import PlayCircleOutlineRoundedIcon from "@mui/icons-material/PlayCircleOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
@@ -11,6 +13,8 @@ import {
   Alert,
   Box,
   Button,
+  IconButton,
+  Slider,
   Stack,
   Typography,
 } from "@mui/material";
@@ -51,14 +55,22 @@ import { VlmStageFeedbackOverlay } from "./components/VlmFeedbackWidgets";
 import { useVlmTeachingFeedback } from "./hooks/useVlmTeachingFeedback";
 import { useTeachingRuntime } from "./hooks/useTeachingRuntime";
 import {
-  teachingMotionClipUrl,
-  teachingMotionClipUrls,
-} from "./motion-video-catalog";
+  lumiMotionClipUrls,
+  lumiMotionTimelineEndsMs,
+} from "./lumi-motion-catalog";
 import { buildNeutralFailurePrompt } from "./neutral-feedback-vocabulary";
+import { passesRandomOnceEvaluation } from "./random-once-action-evaluation";
 import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
-type LessonFlowStage = "overview" | "training" | "countdown" | "evaluation" | "feedback" | "completed";
+type LessonFlowStage =
+  | "overview"
+  | "training"
+  | "countdown"
+  | "evaluation"
+  | "passed"
+  | "feedback"
+  | "completed";
 
 interface LessonEvaluationResult {
   passed: boolean;
@@ -69,10 +81,6 @@ interface LessonEvaluationResult {
 
 const FULL_FRAME_STREAK = 3;
 const ACTION_COUNT = 4;
-const TRAINING_PRE_FADE_MS = 360;
-const TRAINING_POST_END_FADE_MS = 420;
-const TRAINING_BLACK_GAP_MS = 1400;
-const TRAINING_FADE_IN_MS = 520;
 const EVALUATION_COUNTDOWN_SECONDS = 3;
 
 function landmarkConfidence(
@@ -107,6 +115,13 @@ function getRecordingMimeType() {
     "video/webm",
   ];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
+}
+
+function formatPlaybackTime(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
 
 export default function AITeachingPage({
@@ -147,11 +162,12 @@ export default function AITeachingPage({
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [referenceUrl, setReferenceUrl] = useState("");
-  const [renderedReferenceUrl, setRenderedReferenceUrl] = useState("");
   const [selectedReferenceUrl, setSelectedReferenceUrl] = useState("");
   const [motionBreakdown, setMotionBreakdown] =
     useState<CuratedMotionBreakdown | null>(null);
   const [referencePlaybackTimeMs, setReferencePlaybackTimeMs] = useState(0);
+  const [referencePlaying, setReferencePlaying] = useState(false);
+  const [showLiveSkeleton, setShowLiveSkeleton] = useState(false);
   const [liveSkeleton, setLiveSkeleton] = useState<SkeletonSnapshot | null>(
     null,
   );
@@ -175,14 +191,13 @@ export default function AITeachingPage({
   const [completedThroughIndex, setCompletedThroughIndex] = useState(-1);
   const lessonFlowStageRef = useRef<LessonFlowStage>("overview");
   const selectedLessonEndIndexRef = useRef<number | null>(null);
-  const trainingTimerRef = useRef<number | null>(null);
-  const trainingPreFadeTimerRef = useRef<number | null>(null);
   const countdownTimerRef = useRef<number | null>(null);
+  const passTransitionTimerRef = useRef<number | null>(null);
   const recordingCountdownTimerRef = useRef<number | null>(null);
   const evaluationVisibleFrameCountRef = useRef(0);
-  const previousTrainingVideoUrlRef = useRef("");
+  const failedEvaluationKeysRef = useRef(new Set<string>());
+  const segmentEndReachedRef = useRef(false);
   const referenceStageRef = useRef<HTMLDivElement>(null);
-  const referenceTransitionTimerRef = useRef<number | null>(null);
   const {
     containerRef: effectCanvasContainerRef,
     getRecordingStream,
@@ -207,7 +222,6 @@ export default function AITeachingPage({
     runtimeStatus,
     buildProgress,
     referenceVideoUrl,
-    activePlaybackVideoUrl,
     lessonMotions,
   } = useTeachingRuntime({
     danceId: activeDanceId,
@@ -219,6 +233,10 @@ export default function AITeachingPage({
     getTeachingWorkspace(activeDanceId).catch((reason: unknown) =>
       setError(reason instanceof Error ? reason.message : "工作台加载失败。"),
     );
+  }, [activeDanceId]);
+
+  useEffect(() => {
+    failedEvaluationKeysRef.current.clear();
   }, [activeDanceId]);
 
   useEffect(() => {
@@ -254,20 +272,30 @@ export default function AITeachingPage({
 
   const overviewReferenceUrl =
     referenceUrl || referenceVideoUrl || `/dances/${activeDanceId}/reference.mp4` || selectedReferenceUrl;
-  const motionClipUrls = useMemo(
-    () => teachingMotionClipUrls(activeDanceId),
+  const selectedMotionEnd = selectedLessonEndIndex ?? 0;
+  const isFirstMotion = selectedMotionEnd === 0;
+  const lumiClipUrls = useMemo(
+    () => lumiMotionClipUrls(activeDanceId),
     [activeDanceId],
   );
-  const selectedMotionEnd = selectedLessonEndIndex ?? 0;
-  const currentMotionUrl =
-    motionClipUrls[Math.min(trainingClipIndex, selectedMotionEnd)] ??
-    teachingMotionClipUrl(activeDanceId, 0) ??
-    "";
+  const lumiTimelineEndsMs = useMemo(
+    () => lumiMotionTimelineEndsMs(activeDanceId),
+    [activeDanceId],
+  );
+  const selectedMotionEndMs = lumiTimelineEndsMs[selectedMotionEnd] ?? 0;
   const displayReferenceUrl =
     lessonFlowStage === "overview" || lessonFlowStage === "completed"
       ? overviewReferenceUrl
-      : currentMotionUrl || activePlaybackVideoUrl || overviewReferenceUrl;
-  const playbackReferenceUrl = renderedReferenceUrl || displayReferenceUrl;
+      : isFirstMotion
+        ? lumiClipUrls[0] ?? overviewReferenceUrl
+        : overviewReferenceUrl;
+  const playbackReferenceUrl = displayReferenceUrl;
+  const isSegmentPlayback =
+    lessonFlowStage === "training" || lessonFlowStage === "evaluation";
+  const segmentProgressMs = Math.min(
+    Math.max(0, referencePlaybackTimeMs),
+    selectedMotionEndMs,
+  );
   const activeMotionForCards =
     lessonFlowStage === "overview" || lessonFlowStage === "completed"
       ? null
@@ -279,13 +307,14 @@ export default function AITeachingPage({
       ),
     [motionBreakdown],
   );
-  const currentMotionLabel = motionLabels[trainingClipIndex] ?? "当前动作";
-  const selectedLessonLabel = `1-${selectedMotionEnd + 1}`;
+  const currentMotionLabel = motionLabels[selectedMotionEnd] ?? "当前动作";
+  const selectedLessonLabel = `第 ${selectedMotionEnd + 1} 个动作`;
   const phaseLabel = {
     overview: "主界面",
     training: "训练阶段",
     countdown: "准备评估",
     evaluation: "评估中",
+    passed: "评估通过",
     feedback: "评估反馈",
     completed: "完成教学",
   }[lessonFlowStage];
@@ -293,16 +322,23 @@ export default function AITeachingPage({
     if (lessonFlowStage === "overview") {
       return completedThroughIndex >= 0
         ? `第 ${completedThroughIndex + 1} 关已经通过，可以选择下一个动作继续。`
-        : "点击任意动作开始教学。选第几个动作，就练习从 1 到它的动作组合。";
+        : "点击任意动作开始教学。每次只练当前选择的动作。";
     }
     if (lessonFlowStage === "training") {
-      return `正在训练第 ${selectedLessonLabel} 个动作组合。看左侧 ${currentMotionLabel}，学会后说“我学会了”进入评估。`;
+      return isFirstMotion
+        ? `正在训练${selectedLessonLabel}。先跟着 Lumi 的第 1 段动作示范练习，学会后说“我学会了”进入评估。`
+        : `正在训练${selectedLessonLabel}。完整视频会从开头播放到 ${currentMotionLabel} 结束，学会后说“我学会了”进入评估。`;
     }
     if (lessonFlowStage === "countdown") {
       return `准备好，${evaluationCountdown} 秒后跟着左侧视频完整跳一遍。`;
     }
     if (lessonFlowStage === "evaluation") {
-      return `跟住视频，把第 ${selectedLessonLabel} 个动作组合连起来。`;
+      return isFirstMotion
+        ? "跟住 Lumi 的第 1 段动作示范完成评估。"
+        : `跟住完整视频，从开头跳到 ${currentMotionLabel} 结束。`;
+    }
+    if (lessonFlowStage === "passed") {
+      return "动作通过，下一个动作马上开始。";
     }
     if (lessonFlowStage === "feedback" && evaluationResult) {
       return evaluationResult.passed
@@ -312,54 +348,39 @@ export default function AITeachingPage({
     return "四个动作都完成了，可以开始录制你的完整版本。";
   })();
 
-  useEffect(() => {
-    const stage = referenceStageRef.current;
-    if (referenceTransitionTimerRef.current) {
-      window.clearTimeout(referenceTransitionTimerRef.current);
-      referenceTransitionTimerRef.current = null;
-    }
-
-    if (!displayReferenceUrl) return;
-
-    if (lessonFlowStage !== "training") {
-      previousTrainingVideoUrlRef.current = "";
-      stage?.classList.remove("is-video-fading-half", "is-video-fading-out", "is-video-transitioning");
-      referenceTransitionTimerRef.current = window.setTimeout(() => {
-        setRenderedReferenceUrl(displayReferenceUrl);
-        referenceTransitionTimerRef.current = null;
-      }, 0);
+  const toggleSegmentPlayback = useCallback(() => {
+    const video = referenceVideoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      if (
+        selectedMotionEndMs > 0 &&
+        video.currentTime * 1000 >= selectedMotionEndMs - 40
+      ) {
+        video.currentTime = 0;
+        setReferencePlaybackTimeMs(0);
+        segmentEndReachedRef.current = false;
+      }
+      void video.play().catch(() => undefined);
       return;
     }
+    video.pause();
+  }, [selectedMotionEndMs]);
 
-    if (previousTrainingVideoUrlRef.current === displayReferenceUrl) return;
-    const isFirstTrainingClip = previousTrainingVideoUrlRef.current === "";
-    previousTrainingVideoUrlRef.current = displayReferenceUrl;
+  const seekSegmentPlayback = useCallback(
+    (_event: Event, value: number | number[]) => {
+      const video = referenceVideoRef.current;
+      if (!video || !selectedMotionEndMs) return;
+      const nextValue = Array.isArray(value) ? value[0] : value;
+      const nextTimeMs = Math.min(
+        selectedMotionEndMs,
+        Math.max(0, nextValue),
+      );
+      video.currentTime = nextTimeMs / 1000;
+      setReferencePlaybackTimeMs(nextTimeMs);
+    },
+    [selectedMotionEndMs],
+  );
 
-    if (isFirstTrainingClip) {
-      referenceTransitionTimerRef.current = window.setTimeout(() => {
-        setRenderedReferenceUrl(displayReferenceUrl);
-        stage?.classList.add("is-video-transitioning");
-        referenceTransitionTimerRef.current = window.setTimeout(() => {
-          stage?.classList.remove("is-video-transitioning");
-          referenceTransitionTimerRef.current = null;
-        }, TRAINING_FADE_IN_MS);
-      }, 0);
-      return;
-    }
-
-    const alreadyFadedOut = stage?.classList.contains("is-video-fading-out") ?? false;
-    stage?.classList.remove("is-video-transitioning");
-    stage?.classList.add("is-video-fading-out");
-    referenceTransitionTimerRef.current = window.setTimeout(() => {
-      setRenderedReferenceUrl(displayReferenceUrl);
-      stage?.classList.remove("is-video-fading-half", "is-video-fading-out");
-      stage?.classList.add("is-video-transitioning");
-      referenceTransitionTimerRef.current = window.setTimeout(() => {
-        stage?.classList.remove("is-video-transitioning");
-        referenceTransitionTimerRef.current = null;
-      }, TRAINING_FADE_IN_MS);
-    }, alreadyFadedOut ? 0 : TRAINING_POST_END_FADE_MS);
-  }, [displayReferenceUrl, lessonFlowStage]);
   useEffect(() => {
     lessonFlowStageRef.current = lessonFlowStage;
     selectedLessonEndIndexRef.current = selectedLessonEndIndex;
@@ -381,14 +402,11 @@ export default function AITeachingPage({
         URL.revokeObjectURL(referenceUrlRef.current);
       }
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      if (trainingTimerRef.current) window.clearTimeout(trainingTimerRef.current);
-      if (trainingPreFadeTimerRef.current)
-        window.clearTimeout(trainingPreFadeTimerRef.current);
       if (countdownTimerRef.current) window.clearTimeout(countdownTimerRef.current);
+      if (passTransitionTimerRef.current)
+        window.clearTimeout(passTransitionTimerRef.current);
       if (recordingCountdownTimerRef.current)
         window.clearInterval(recordingCountdownTimerRef.current);
-      if (referenceTransitionTimerRef.current)
-        window.clearTimeout(referenceTransitionTimerRef.current);
     },
     [],
   );
@@ -559,6 +577,7 @@ export default function AITeachingPage({
 
   const startCamera = useCallback(async () => {
     setError("");
+    setShowLiveSkeleton(false);
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("当前浏览器不支持摄像头访问，请使用最新版 Chrome 或 Edge。");
       return;
@@ -589,29 +608,25 @@ export default function AITeachingPage({
   }, [loadVision]);
 
   const clearLessonTimers = useCallback(() => {
-    if (trainingTimerRef.current) {
-      window.clearTimeout(trainingTimerRef.current);
-      trainingTimerRef.current = null;
-    }
     if (countdownTimerRef.current) {
       window.clearTimeout(countdownTimerRef.current);
       countdownTimerRef.current = null;
     }
-    if (trainingPreFadeTimerRef.current) {
-      window.clearTimeout(trainingPreFadeTimerRef.current);
-      trainingPreFadeTimerRef.current = null;
+    if (passTransitionTimerRef.current) {
+      window.clearTimeout(passTransitionTimerRef.current);
+      passTransitionTimerRef.current = null;
     }
   }, []);
 
   const startTrainingFromMotion = useCallback(
-    (motionIndex: number, startAtSelectedMotion = false) => {
+    (motionIndex: number) => {
       const targetIndex = Math.min(ACTION_COUNT - 1, Math.max(0, motionIndex));
       clearLessonTimers();
       setError("");
       setLumiStage("teaching");
       setEvaluationResult(null);
       setSelectedLessonEndIndex(targetIndex);
-      setTrainingClipIndex(startAtSelectedMotion ? targetIndex : 0);
+      setTrainingClipIndex(targetIndex);
       setEvaluationCountdown(EVALUATION_COUNTDOWN_SECONDS);
       setLessonFlowStage("training");
       if (!streamRef.current) void startCamera();
@@ -647,18 +662,19 @@ export default function AITeachingPage({
     clearLessonTimers();
     setError("");
     setEvaluationResult(null);
-    setTrainingClipIndex(0);
+    setTrainingClipIndex(selectedLessonEndIndexRef.current ?? selectedMotionEnd);
     setEvaluationCountdown(EVALUATION_COUNTDOWN_SECONDS);
     evaluationVisibleFrameCountRef.current = 0;
     setLessonFlowStage("countdown");
     if (!streamRef.current) void startCamera();
-  }, [clearLessonTimers, startCamera]);
+  }, [clearLessonTimers, selectedMotionEnd, startCamera]);
 
   const finishEvaluation = useCallback(() => {
     const targetIndex = selectedLessonEndIndexRef.current ?? selectedMotionEnd;
-    const visibleFrames = evaluationVisibleFrameCountRef.current;
-    const score = Math.min(100, Math.round(58 + visibleFrames * 3.2));
-    const passed = visibleFrames >= 8;
+    const evaluationKey = `${activeDanceId}:${targetIndex}`;
+    const hasFailedBefore = failedEvaluationKeysRef.current.has(evaluationKey);
+    const passed = passesRandomOnceEvaluation(hasFailedBefore);
+    if (!passed) failedEvaluationKeysRef.current.add(evaluationKey);
     const neutralFailurePrompt = buildNeutralFailurePrompt({
       danceId: activeDanceId,
       actionIndex: targetIndex,
@@ -667,13 +683,13 @@ export default function AITeachingPage({
     const result: LessonEvaluationResult = passed
       ? {
           passed: true,
-          score,
+          score: 88,
           headline: `第 ${targetIndex + 1} 关通过`,
-          detail: "动作和镜头里的身体状态都比较稳定，可以回主界面继续下一关。",
+          detail: "本轮评估通过，可以回主界面继续下一关。",
         }
       : {
           passed: false,
-          score: Math.max(35, Math.min(score, 72)),
+          score: 42,
           headline: "这次还没过",
           detail: `${neutralFailurePrompt}你可以回到训练再看一轮，或先跳过。`,
         };
@@ -682,9 +698,23 @@ export default function AITeachingPage({
     if (passed) {
       const completedIndex = Math.max(completedThroughIndex, targetIndex);
       setCompletedThroughIndex(completedIndex);
-      setSelectedLessonEndIndex(null);
-      setTrainingClipIndex(0);
-      setLessonFlowStage(completedIndex >= ACTION_COUNT - 1 ? "completed" : "overview");
+      const nextIndex = targetIndex + 1;
+      setLessonFlowStage("passed");
+      passTransitionTimerRef.current = window.setTimeout(() => {
+        passTransitionTimerRef.current = null;
+        setEvaluationResult(null);
+        if (nextIndex < ACTION_COUNT) {
+          setSelectedLessonEndIndex(nextIndex);
+          setTrainingClipIndex(nextIndex);
+          setEvaluationCountdown(EVALUATION_COUNTDOWN_SECONDS);
+          setLessonFlowStage("training");
+          return;
+        }
+
+        setSelectedLessonEndIndex(null);
+        setTrainingClipIndex(0);
+        setLessonFlowStage("completed");
+      }, 2000);
     } else {
       setLessonFlowStage("feedback");
     }
@@ -700,7 +730,7 @@ export default function AITeachingPage({
             countdownTimerRef.current = null;
           }
           evaluationVisibleFrameCountRef.current = 0;
-          setTrainingClipIndex(0);
+          setTrainingClipIndex(selectedMotionEnd);
           setLessonFlowStage("evaluation");
           return EVALUATION_COUNTDOWN_SECONDS;
         }
@@ -714,61 +744,33 @@ export default function AITeachingPage({
         countdownTimerRef.current = null;
       }
     };
-  }, [lessonFlowStage]);
+  }, [lessonFlowStage, selectedMotionEnd]);
   useEffect(() => {
     const video = referenceVideoRef.current;
     if (!video || !playbackReferenceUrl) return;
 
-    const stage = referenceStageRef.current;
     const autoPlay =
       lessonFlowStage === "overview" ||
       lessonFlowStage === "completed" ||
       lessonFlowStage === "training" ||
       lessonFlowStage === "evaluation";
 
-    const clearTrainingPlaybackTimers = () => {
-      if (trainingTimerRef.current) {
-        window.clearTimeout(trainingTimerRef.current);
-        trainingTimerRef.current = null;
-      }
-      if (trainingPreFadeTimerRef.current) {
-        window.clearTimeout(trainingPreFadeTimerRef.current);
-        trainingPreFadeTimerRef.current = null;
-      }
-    };
+    const handleTimelineBoundary = () => {
+      if (segmentEndReachedRef.current) return;
+      segmentEndReachedRef.current = true;
 
-    const scheduleTrainingPreFade = () => {
-      if (lessonFlowStage !== "training") return;
-      if (trainingPreFadeTimerRef.current) {
-        window.clearTimeout(trainingPreFadeTimerRef.current);
-        trainingPreFadeTimerRef.current = null;
+      if (lessonFlowStage === "training") {
+        video.currentTime = 0;
+        setReferencePlaybackTimeMs(0);
+        segmentEndReachedRef.current = false;
+        void video.play().catch(() => undefined);
+        return;
       }
 
-      const durationMs = Number.isFinite(video.duration) && video.duration > 0
-        ? video.duration * 1000
-        : 0;
-      if (!durationMs) return;
-
-      const remainingMs = Math.max(0, durationMs - video.currentTime * 1000);
-      const fadeDelayMs = Math.max(0, remainingMs - TRAINING_PRE_FADE_MS);
-      trainingPreFadeTimerRef.current = window.setTimeout(() => {
-        stage?.classList.remove("is-video-transitioning", "is-video-fading-out");
-        stage?.classList.add("is-video-fading-half");
-        trainingPreFadeTimerRef.current = null;
-      }, fadeDelayMs);
-    };
-
-    const replayCurrentTrainingClip = () => {
-      clearTrainingPlaybackTimers();
-      video.currentTime = 0;
-      stage?.classList.remove("is-video-fading-half", "is-video-fading-out");
-      stage?.classList.add("is-video-transitioning");
-      void video.play().catch(() => undefined);
-      referenceTransitionTimerRef.current = window.setTimeout(() => {
-        stage?.classList.remove("is-video-transitioning");
-        referenceTransitionTimerRef.current = null;
-      }, TRAINING_FADE_IN_MS);
-      scheduleTrainingPreFade();
+      if (lessonFlowStage === "evaluation") {
+        video.pause();
+        finishEvaluation();
+      }
     };
 
     video.loop = lessonFlowStage === "overview" || lessonFlowStage === "completed";
@@ -783,60 +785,49 @@ export default function AITeachingPage({
       video.load();
     }
     video.currentTime = 0;
+    setReferencePlaybackTimeMs(0);
+    setReferencePlaying(false);
+    segmentEndReachedRef.current = false;
 
     if (autoPlay) {
-      void video.play().then(scheduleTrainingPreFade).catch(() => undefined);
+      void video.play().catch(() => undefined);
     } else {
       video.pause();
     }
 
-    const handleLoadedMetadata = () => scheduleTrainingPreFade();
-    const handlePlaying = () => scheduleTrainingPreFade();
-
-    const handleEnded = () => {
-      if (lessonFlowStage === "training") {
-        clearTrainingPlaybackTimers();
-        stage?.classList.remove("is-video-transitioning", "is-video-fading-half");
-        stage?.classList.add("is-video-fading-out");
-        trainingTimerRef.current = window.setTimeout(() => {
-          if (trainingClipIndex >= selectedMotionEnd) {
-            if (selectedMotionEnd === 0) {
-              replayCurrentTrainingClip();
-            } else {
-              setTrainingClipIndex(0);
-            }
-            return;
-          }
-          setTrainingClipIndex((current) => current + 1);
-        }, TRAINING_BLACK_GAP_MS + TRAINING_POST_END_FADE_MS);
-        return;
-      }
-
-      if (lessonFlowStage === "evaluation") {
-        if (trainingClipIndex < selectedMotionEnd) {
-          setTrainingClipIndex((current) => current + 1);
-        } else {
-          finishEvaluation();
-        }
+    const handlePlaying = () => setReferencePlaying(true);
+    const handlePause = () => setReferencePlaying(false);
+    const handleTimeUpdate = () => {
+      if (!isSegmentPlayback || !selectedMotionEndMs) return;
+      if (video.currentTime * 1000 >= selectedMotionEndMs - 40) {
+        video.currentTime = selectedMotionEndMs / 1000;
+        handleTimelineBoundary();
       }
     };
 
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    const handleEnded = () => {
+      if (!isSegmentPlayback) return;
+      handleTimelineBoundary();
+    };
+
     video.addEventListener("playing", handlePlaying);
+    video.addEventListener("pause", handlePause);
+    video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
     return () => {
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       video.removeEventListener("playing", handlePlaying);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
-      clearTrainingPlaybackTimers();
     };
   }, [
     finishEvaluation,
     playbackReferenceUrl,
     lessonFlowStage,
     lumiStage,
+    isSegmentPlayback,
     selectedMotionEnd,
-    trainingClipIndex,
+    selectedMotionEndMs,
   ]);
   const startRecording = () => {
     const stream = getRecordingStream();
@@ -956,6 +947,14 @@ export default function AITeachingPage({
       retryCurrentTraining();
       return;
     }
+    if (result.command.intent === "SHOW_SKELETON") {
+      setShowLiveSkeleton(true);
+      return;
+    }
+    if (result.command.intent === "HIDE_SKELETON") {
+      setShowLiveSkeleton(false);
+      return;
+    }
 
     const recordingHandled = executeRecordingVoiceCommand(result, {
       start: startRecordingFromVoice,
@@ -966,15 +965,15 @@ export default function AITeachingPage({
     if (result.command.intent === "NEXT_ACTION") {
       const current = selectedLessonEndIndexRef.current;
       if (lessonFlowStage === "overview" || lessonFlowStage === "completed") {
-        startTrainingFromMotion(Math.min(ACTION_COUNT - 1, completedThroughIndex + 1), true);
+        startTrainingFromMotion(Math.min(ACTION_COUNT - 1, completedThroughIndex + 1));
       } else if (current != null) {
-        startTrainingFromMotion(Math.min(ACTION_COUNT - 1, current + 1), true);
+        startTrainingFromMotion(Math.min(ACTION_COUNT - 1, current + 1));
       }
       return;
     }
     if (result.command.intent === "PREVIOUS_ACTION") {
       const current = selectedLessonEndIndexRef.current ?? trainingClipIndex;
-      startTrainingFromMotion(Math.max(0, current - 1), true);
+      startTrainingFromMotion(Math.max(0, current - 1));
       return;
     }
     if (result.command.intent === "REPEAT_ACTION") {
@@ -982,6 +981,7 @@ export default function AITeachingPage({
       return;
     }
     if (result.command.intent === "RESTART_LESSON") {
+      failedEvaluationKeysRef.current.clear();
       startTrainingFromMotion(0);
       return;
     }
@@ -1046,14 +1046,10 @@ export default function AITeachingPage({
           <MotionPreviewSequence
             mode="compact"
             videoUrl={overviewReferenceUrl}
+            clipUrls={lumiClipUrls}
             motions={motionBreakdown?.motions}
             activeMotionIndex={activeMotionForCards}
-            onSelectMotion={(motionIndex) =>
-              startTrainingFromMotion(
-                motionIndex,
-                lessonFlowStage === "training" || lessonFlowStage === "feedback",
-              )
-            }
+            onSelectMotion={startTrainingFromMotion}
 
           />
           <Button
@@ -1081,28 +1077,62 @@ export default function AITeachingPage({
                     <video
                       ref={referenceVideoRef}
                       src={playbackReferenceUrl}
-                      controls
+                      controls={
+                        lessonFlowStage === "overview" ||
+                        lessonFlowStage === "completed"
+                      }
                       autoPlay
                       loop={lessonFlowStage === "overview" || lessonFlowStage === "completed"}
                       muted={lumiStage === "intro"}
                       playsInline
-                      preload="metadata"
+                      preload="auto"
                       onLoadedMetadata={(event) =>
                         setReferencePlaybackTimeMs(
                           Math.round(event.currentTarget.currentTime * 1000),
                         )
                       }
-                      onTimeUpdate={(event) =>
+                      onTimeUpdate={(event) => {
+                        if (!isSegmentPlayback) return;
                         setReferencePlaybackTimeMs(
                           Math.round(event.currentTarget.currentTime * 1000),
-                        )
-                      }
+                        );
+                      }}
+                      onPlay={() => setReferencePlaying(true)}
+                      onPause={() => setReferencePlaying(false)}
                     />
                     <SkeletonOverlay
                       snapshot={referenceSkeleton}
                       videoRef={referenceVideoRef}
                       mirrored={false}
                     />
+                    {isSegmentPlayback && selectedMotionEndMs > 0 && (
+                      <Box className="lesson-video-controls">
+                        <IconButton
+                          aria-label={referencePlaying ? "暂停教学视频" : "播放教学视频"}
+                          className="lesson-video-toggle"
+                          onClick={toggleSegmentPlayback}
+                          size="small"
+                        >
+                          {referencePlaying ? (
+                            <PauseRoundedIcon fontSize="small" />
+                          ) : (
+                            <PlayArrowRoundedIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                        <Slider
+                          aria-label="教学视频进度"
+                          className="lesson-video-progress"
+                          min={0}
+                          max={selectedMotionEndMs}
+                          step={10}
+                          value={segmentProgressMs}
+                          onChange={seekSegmentPlayback}
+                        />
+                        <Typography className="lesson-video-time" component="span">
+                          {formatPlaybackTime(segmentProgressMs)} / {formatPlaybackTime(selectedMotionEndMs)}
+                        </Typography>
+                      </Box>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1177,11 +1207,13 @@ export default function AITeachingPage({
                       className="camera-effect-layer"
                       aria-hidden="true"
                     />
-                    <SkeletonOverlay
-                      snapshot={liveSkeleton}
-                      videoRef={liveVideoRef}
-                      mirrored={false}
-                    />
+                    {showLiveSkeleton && (
+                      <SkeletonOverlay
+                        snapshot={liveSkeleton}
+                        videoRef={liveVideoRef}
+                        mirrored={false}
+                      />
+                    )}
                     {recordingState === "idle" && lessonFlowStage !== "completed" && (
                       <Stack className="camera-placeholder" alignItems="center">
                         <CameraswitchRoundedIcon />
@@ -1193,7 +1225,7 @@ export default function AITeachingPage({
                 {recordingState === "recording" && (
                   <Box className="recording-indicator">REC</Box>
                 )}
-                {motionBreakdown && (
+                {isSegmentPlayback && motionBreakdown && (
                   <MotionBreakdownOverlay
                     motions={motionBreakdown.motions}
                     currentTimeMs={referencePlaybackTimeMs}
@@ -1254,7 +1286,9 @@ export default function AITeachingPage({
                   开始录制完整版本
                 </Button>
               )}
-              {recordingState === "idle" && lessonFlowStage !== "completed" && (
+              {recordingState === "idle" &&
+                lessonFlowStage !== "completed" &&
+                lessonFlowStage !== "passed" && (
                 <Button
                   variant="contained"
                   onClick={startCamera}

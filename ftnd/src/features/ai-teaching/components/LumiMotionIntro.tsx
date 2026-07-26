@@ -9,6 +9,10 @@ import {
   useState,
 } from "react";
 import LumiWebGLParticleField from "./LumiWebGLParticleField";
+import {
+  lumiMotionClipUrls,
+  resolveLumiDanceId,
+} from "../lumi-motion-catalog";
 
 interface MotionLabel {
   motionId: string;
@@ -23,15 +27,6 @@ interface LumiMotionIntroProps {
 
 type IntroPhase = "greeting" | "showcase" | "ready";
 
-const MOTION_CLIPS: Record<string, string[]> = {
-  "dance-001": ["cat1.mp4", "cat2.mp4", "cat3.mp4", "cat4.mp4"],
-  "dance-002": ["cloud1.mp4", "cloud2.mp4", "cloud3.mp4", "cloud4.mp4"],
-  "dance-003": ["fade1.mp4", "fade2.mp4", "fade3.mp4", "fade4.mp4"],
-  "dance-004": ["fightt1.mp4", "fightt2.mp4", "fightt3.mp4", "fighttt4.mp4"],
-  "dance-005": ["indoo1.mp4", "indoo2.mp4", "indoo3.mp4", "indoo4.mp4"],
-  "dance-006": ["noo1.mp4", "noo2.mp4", "noo3.mp4", "noo4.mp4"],
-};
-
 export default function LumiMotionIntro({
   danceId,
   motions = [],
@@ -45,14 +40,14 @@ export default function LumiMotionIntro({
   const transitionLock = useRef(false);
   const greetingTimer = useRef<number | null>(null);
   const transitionTimer = useRef<number | null>(null);
-  const resolvedDanceId = danceId in MOTION_CLIPS ? danceId : "dance-001";
-  const clips = MOTION_CLIPS[resolvedDanceId];
+  const resolvedDanceId = resolveLumiDanceId(danceId);
+  const clips = lumiMotionClipUrls(resolvedDanceId);
   const cards = useMemo(
     () =>
-      clips.map((fileName, index) => ({
+      clips.map((src, index) => ({
         id: `${resolvedDanceId}-${index}`,
         label: motions[index]?.label || `动作 ${index + 1}`,
-        src: `/lumi-motions/${resolvedDanceId}/${fileName}`,
+        src,
       })),
     [clips, motions, resolvedDanceId],
   );

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { LessonPlanRegistry } from './agent/lesson-plan.registry';
+import { RandomOnceActionEvaluator } from './action-evaluation';
 import { TeachingAgentController } from './agent/teaching-agent.controller';
 import { TeachingAgentService } from './agent/teaching-agent.service';
 import { TeachingAgentSessionStore } from './agent/teaching-agent-session.store';
@@ -31,6 +32,7 @@ import { ReferenceDatasetRepository } from './datasets/reference-dataset.reposit
     TeachingAgentSessionStore,
     TeachingAgentTools,
     TeachingAgentValidator,
+    RandomOnceActionEvaluator,
     PromptCatalogService,
     ManagedPromptExecutorService,
     {

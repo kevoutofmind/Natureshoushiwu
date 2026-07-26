@@ -17,6 +17,7 @@ import type {
   TeachingVoiceCommand,
 } from '../contracts/teaching-agent.types';
 import type { RealtimeJudgeResult } from '../contracts/realtime-judge.types';
+import { RandomOnceActionEvaluator } from '../action-evaluation';
 import { PromptCatalogService } from '../prompts/prompt-catalog.service';
 import { MotionTemplateRegistry } from '../templates/motion-template.registry';
 import { VlmCoreService } from '../vlm-core.service';
@@ -38,6 +39,7 @@ export class TeachingAgentService {
     private readonly validator: TeachingAgentValidator,
     private readonly templateRegistry: MotionTemplateRegistry,
     private readonly promptCatalog: PromptCatalogService,
+    private readonly actionEvaluator: RandomOnceActionEvaluator,
   ) {}
 
   registerLesson(plan: TeachingLessonPlan): TeachingLessonRegistrationResult {
@@ -66,6 +68,7 @@ export class TeachingAgentService {
       updatedAt: now,
     };
     this.sessionStore.create(session);
+    this.actionEvaluator.resetSession(session.sessionId);
 
     const commands = [
       this.tools.command(session.sessionId, 'SPEAK', {
@@ -236,12 +239,12 @@ export class TeachingAgentService {
       attemptIndex: session.attemptIndex,
       observation,
     });
-    session.latestJudgeResult = result;
-
     switch (result.decision) {
       case 'KEEP_WATCHING':
+        session.latestJudgeResult = result;
         return [];
       case 'NOT_VISIBLE':
+        session.latestJudgeResult = result;
         return [
           this.tools.command(session.sessionId, 'SHOW_HINT', {
             speech: result.speech,
@@ -249,11 +252,14 @@ export class TeachingAgentService {
           }),
         ];
       case 'ACCEPT':
-        return this.advanceAfterPass(session, plan, result, 'PASSED');
       case 'ACCEPT_HINT':
-        return this.advanceAfterPass(session, plan, result, 'PASSED_WITH_HINT');
-      case 'RETRY':
-        return this.retryOrAssist(session, plan, result);
+      case 'RETRY': {
+        const evaluation = this.actionEvaluator.evaluate(result);
+        session.latestJudgeResult = evaluation.result;
+        return evaluation.outcome === 'PASSED'
+          ? this.advanceAfterPass(session, plan, evaluation.result, 'PASSED')
+          : this.retryOrAssist(session, plan, evaluation.result);
+      }
     }
   }
 
@@ -465,6 +471,7 @@ export class TeachingAgentService {
           '可以，这个动作我们先放一放，按你的选择进入下一个动作。',
         );
       case 'RESTART_LESSON':
+        this.actionEvaluator.resetSession(session.sessionId);
         session.currentMotionIndex = 0;
         session.completedMotions = [];
         return this.restartCurrentMotion(session, plan);
@@ -526,6 +533,7 @@ export class TeachingAgentService {
     plan: TeachingLessonPlan,
   ): TeachingAgentCommand[] {
     session.phase = 'COMPLETED';
+    this.actionEvaluator.resetSession(session.sessionId);
     return [
       this.tools.command(session.sessionId, 'SPEAK', {
         speech:

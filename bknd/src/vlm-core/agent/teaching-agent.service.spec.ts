@@ -15,6 +15,7 @@ import { MotionTemplateRegistry } from '../templates/motion-template.registry';
 import { ComparisonInputValidator } from '../validation/comparison-input.validator';
 import { RealtimeJudgeValidator } from '../validation/realtime-judge.validator';
 import { VlmCoreService } from '../vlm-core.service';
+import { RandomOnceActionEvaluator } from '../action-evaluation';
 import { LessonPlanRegistry } from './lesson-plan.registry';
 import { TeachingAgentService } from './teaching-agent.service';
 import { TeachingAgentSessionStore } from './teaching-agent-session.store';
@@ -22,6 +23,10 @@ import { TeachingAgentTools } from './teaching-agent.tools';
 import { TeachingAgentValidator } from './teaching-agent.validator';
 
 describe('TeachingAgentService', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   function setup(motionIds: string[] = ['motion-001', 'motion-002']) {
     const templateRegistry = new MotionTemplateRegistry();
     const realtimeValidator = new RealtimeJudgeValidator();
@@ -52,12 +57,14 @@ describe('TeachingAgentService', () => {
       new TeachingAgentValidator(),
       templateRegistry,
       promptCatalog,
+      new RandomOnceActionEvaluator(),
     );
     agent.registerLesson(createLessonPlanFixture(motionIds));
     return { agent };
   }
 
   it('runs preview, unit teaching, local judging and full challenge', () => {
+    jest.spyOn(Math, 'random').mockReturnValue(0.75);
     const { agent } = setup();
     const started = agent.startSession({
       schemaVersion: 'teaching-agent-start-v1',
@@ -162,7 +169,8 @@ describe('TeachingAgentService', () => {
     expect(replay.commands).toEqual(first.commands);
   });
 
-  it('uses local retry policy and requests non-blocking cloud coaching', () => {
+  it('retries a randomly failed motion once, then forces it to pass', () => {
+    jest.spyOn(Math, 'random').mockReturnValue(0);
     const { agent } = setup(['motion-001']);
     agent.startSession({
       schemaVersion: 'teaching-agent-start-v1',
@@ -208,7 +216,7 @@ describe('TeachingAgentService', () => {
         3,
       ),
     );
-    const assisted = agent.handleEvent(
+    const forcedPass = agent.handleEvent(
       realtimeAgentEvent(
         'agent-session-retry',
         'failure-2',
@@ -218,16 +226,11 @@ describe('TeachingAgentService', () => {
       ),
     );
 
-    expect(assisted.session.phase).toBe('FULL_CHALLENGE');
-    const cloudCommand = assisted.commands.find(
-      (command) => command.tool === 'REQUEST_CLOUD_COACHING',
+    expect(forcedPass.session.phase).toBe('FULL_CHALLENGE');
+    expect(forcedPass.session.latestJudgeResult?.decision).toBe('ACCEPT');
+    expect(forcedPass.commands.map((command) => command.tool)).not.toContain(
+      'REQUEST_CLOUD_COACHING',
     );
-    expect(cloudCommand).toBeDefined();
-    expect(cloudCommand?.blocking).toBe(false);
-    expect(cloudCommand?.arguments.prompt).toEqual({
-      promptId: 'adaptive-motion-coaching',
-      version: 'adaptive-motion-coaching-v1.0.0',
-    });
   });
 
   it('never lets asynchronous cloud coaching control progression', () => {

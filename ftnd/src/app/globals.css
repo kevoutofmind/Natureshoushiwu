@@ -4106,6 +4106,48 @@ html[data-refresh-redirect="true"] body {
   animation: lesson-video-fade-in 520ms cubic-bezier(.22, .61, .36, 1) both;
 }
 
+.lesson-video-controls {
+  position: absolute;
+  z-index: 14;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 6px;
+  color: #fff;
+  background: rgb(0 0 0 / 70%);
+  backdrop-filter: blur(8px);
+}
+
+.lesson-video-toggle {
+  width: 30px;
+  height: 30px;
+  color: #fff;
+}
+
+.lesson-video-progress {
+  color: var(--aqua);
+}
+
+.lesson-video-progress .MuiSlider-thumb {
+  width: 11px;
+  height: 11px;
+}
+
+.lesson-video-time {
+  min-width: 72px;
+  color: rgb(255 255 255 / 86%);
+  font-size: .67rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 @keyframes lesson-video-fade-in {
   0% {
     opacity: 0;

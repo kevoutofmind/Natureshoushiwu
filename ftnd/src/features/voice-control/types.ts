@@ -22,6 +22,8 @@ export type SimpleVoiceCommandIntent =
   | 'START_EVALUATION'
   | 'SKIP_TO_OVERVIEW'
   | 'RETRY_PRACTICE'
+  | 'SHOW_SKELETON'
+  | 'HIDE_SKELETON'
   | 'COACH_QUESTION'
   | 'START_RECORDING'
   | 'STOP_RECORDING';
