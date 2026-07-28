@@ -10,10 +10,8 @@ export type LumiWakeDecision =
 
 const LUMI_WAKE_PATTERNS = [
   /\blumi\b/iu,
-  /露米/u,
-  /鲁米/u,
-  /路米/u,
-  /卢米/u,
+  /(?:露|鲁|路|卢|陆|璐)[米咪]/u,
+  /噜咪/u,
 ];
 
 export function extractLumiWakeCommand(transcript: string): LumiWakeMatch {

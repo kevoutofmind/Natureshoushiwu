@@ -1373,21 +1373,38 @@ h6 {
 }
 
 .lumi-glass-host {
+  --lumi-card-height: 176px;
   position: relative;
   width: 100%;
-  height: 176px;
+  height: min(var(--lumi-card-height), calc(100dvh - 104px));
 }
 
 .lumi-glass-host.has-actions {
-  height: 230px;
+  --lumi-card-height: 238px;
 }
 
 .lumi-glass-host.has-review {
-  height: 272px;
+  --lumi-card-height: 272px;
 }
 
 .lumi-glass-host.has-review.has-actions {
-  height: 326px;
+  --lumi-card-height: 334px;
+}
+
+.lumi-glass-host.has-conversation {
+  --lumi-card-height: 332px;
+}
+
+.lumi-glass-host.has-conversation.has-actions {
+  --lumi-card-height: 394px;
+}
+
+.lumi-glass-host.has-review.has-conversation {
+  --lumi-card-height: 448px;
+}
+
+.lumi-glass-host.has-review.has-conversation.has-actions {
+  --lumi-card-height: 510px;
 }
 
 .lumi-liquid-glass {
@@ -1418,9 +1435,14 @@ h6 {
 
 .lumi-glass-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: var(--lumi-card-width);
-  height: 176px;
+  height: min(var(--lumi-card-height), calc(100dvh - 104px));
   padding: 22px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 244, 238, 0.45) transparent;
   border-radius: 30px;
   color: #fff;
   cursor: grab;
@@ -1433,18 +1455,6 @@ h6 {
       rgba(255, 255, 255, 0.025) 46%,
       transparent 72%
     );
-}
-
-.lumi-glass-host.has-actions .lumi-glass-card {
-  height: 230px;
-}
-
-.lumi-glass-host.has-review .lumi-glass-card {
-  height: 272px;
-}
-
-.lumi-glass-host.has-review.has-actions .lumi-glass-card {
-  height: 326px;
 }
 
 .lumi-glass-card::after {
@@ -1495,15 +1505,32 @@ h6 {
   letter-spacing: -0.02em;
 }
 
-.lumi-glass-header small {
+.lumi-header-meta {
+  display: grid;
+  justify-items: end;
   min-width: 0;
   margin-left: auto;
+  line-height: 1.15;
+}
+
+.lumi-header-meta span,
+.lumi-header-meta small {
+  min-width: 0;
+  max-width: 150px;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.5);
   font-size: 0.68rem;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.lumi-header-meta span {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.lumi-header-meta small {
+  margin-top: 3px;
+  color: var(--aqua);
 }
 
 .lumi-current-line {
@@ -1513,6 +1540,53 @@ h6 {
   font-weight: 440;
   line-height: 1.68;
   letter-spacing: -0.018em;
+}
+
+.lumi-conversation {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  overflow-y: auto;
+  touch-action: pan-y;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.lumi-chat-turn {
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(4, 10, 14, 0.28);
+}
+
+.lumi-chat-turn > span {
+  display: block;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.lumi-chat-turn > p {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 560;
+  line-height: 1.48;
+}
+
+.lumi-chat-turn.is-user > p {
+  color: #fff;
+}
+
+.lumi-chat-turn.is-lumi {
+  border-color: rgba(37, 244, 238, 0.24);
+  background: rgba(37, 244, 238, 0.07);
+}
+
+.lumi-chat-turn.is-lumi > span,
+.lumi-chat-turn.is-lumi > p {
+  color: var(--aqua);
 }
 
 .lumi-review {
@@ -1537,7 +1611,102 @@ h6 {
 .lumi-actions {
   display: flex;
   gap: 8px;
-  margin-top: 18px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.lumi-actions > *,
+.lumi-voice-controls {
+  width: 100%;
+}
+
+.lumi-listening-debug {
+  position: fixed;
+  z-index: 2147483647;
+  top: 12px;
+  left: 50%;
+  display: grid;
+  gap: 7px;
+  width: min(680px, calc(100vw - 24px));
+  max-height: min(180px, calc(100dvh - 24px));
+  padding: 9px 12px 10px;
+  overflow: hidden;
+  border: 1px solid rgb(88 238 234 / 28%);
+  border-radius: 12px;
+  color: rgb(255 255 255 / 88%);
+  background: rgb(3 8 12 / 88%);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 30%);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+  user-select: none;
+  transform: translateX(-50%);
+}
+
+.lumi-listening-debug-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lumi-listening-debug-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 32%);
+}
+
+.lumi-listening-debug-dot.is-listening {
+  background: rgb(88 238 234 / 82%);
+  box-shadow: 0 0 10px rgb(88 238 234 / 48%);
+}
+
+.lumi-listening-debug-label {
+  flex: 0 0 auto;
+  color: rgb(88 238 234 / 92%);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.lumi-listening-debug-state {
+  margin-left: auto;
+  color: rgb(255 255 255 / 48%);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.lumi-listening-debug-log {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lumi-listening-debug-entry {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  color: rgb(255 255 255 / 88%);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.lumi-listening-debug-entry time {
+  color: rgb(88 238 234 / 52%);
+  font-variant-numeric: tabular-nums;
+}
+
+.lumi-listening-debug-entry span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lumi-listening-debug-empty {
+  color: rgb(255 255 255 / 46%);
+  font-size: 0.75rem;
 }
 
 .lumi-actions .MuiButton-root {

@@ -26,6 +26,16 @@ describe("extractLumiWakeCommand", () => {
     });
   });
 
+  it.each(["露咪", "陆米", "璐咪", "噜咪"])(
+    "accepts the observed homophone %s",
+    (wakeWord) => {
+      expect(extractLumiWakeCommand(`${wakeWord}，慢一点`)).toEqual({
+        detected: true,
+        commandText: "慢一点",
+      });
+    },
+  );
+
   it("does not wake for an ordinary instruction", () => {
     expect(extractLumiWakeCommand("下一个动作")).toEqual({
       detected: false,

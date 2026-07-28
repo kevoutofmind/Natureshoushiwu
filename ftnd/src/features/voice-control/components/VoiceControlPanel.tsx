@@ -1,44 +1,66 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import MicRoundedIcon from "@mui/icons-material/MicRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import {
   Alert,
-  Box,
   Button,
   CircularProgress,
   Snackbar,
   Stack,
-  Typography,
 } from "@mui/material";
 import { interpretVoiceCommand } from "../api";
 import { useWhisperSpeechRecognition } from "../hooks/useWhisperSpeechRecognition";
 import { resolveLumiWakeTurn } from "../lumiWakeWord";
-import type { VoiceCommandResult } from "../types";
+import type {
+  VoiceCommandResult,
+  VoiceInteractionViewState,
+} from "../types";
 
 import { matchActionNavigationVoiceIntent } from '../immediateVoiceCommands';
 
 interface VoiceControlPanelProps {
   autoListen?: boolean;
   onCommandRecognized?: (result: VoiceCommandResult) => void;
+  onInteractionChange?: (state: VoiceInteractionViewState) => void;
+}
+
+interface HeardTranscriptEntry {
+  id: number;
+  text: string;
+  time: string;
 }
 
 export default function VoiceControlPanel({
   autoListen = false,
   onCommandRecognized,
+  onInteractionChange,
 }: VoiceControlPanelProps) {
   const startedAutomaticallyRef = useRef(false);
   const wakeWindowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAwakeRef = useRef(false);
   const requestQueueRef = useRef(Promise.resolve());
   const pendingRequestCountRef = useRef(0);
+  const heardTranscriptSequenceRef = useRef(0);
   const [manuallyPaused, setManuallyPaused] = useState(false);
   const [isAwake, setIsAwake] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [lastResult, setLastResult] = useState<VoiceCommandResult | null>(null);
   const [requestError, setRequestError] = useState("");
+  const [debugPortalReady, setDebugPortalReady] = useState(false);
+  const [heardTranscripts, setHeardTranscripts] = useState<
+    HeardTranscriptEntry[]
+  >([]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setDebugPortalReady(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const returnToStandby = useCallback(() => {
     isAwakeRef.current = false;
@@ -144,21 +166,44 @@ export default function VoiceControlPanel({
         return;
       }
 
-      returnToStandby();
       await executeTranscript(decision.commandText);
     },
     [activateLumi, executeTranscript, returnToStandby],
   );
 
+  const handleFinalTranscript = useCallback(
+    async (transcript: string) => {
+      const rawTranscript = transcript.trim();
+      if (rawTranscript) {
+        heardTranscriptSequenceRef.current += 1;
+        const entry: HeardTranscriptEntry = {
+          id: heardTranscriptSequenceRef.current,
+          text: rawTranscript,
+          time: new Date().toLocaleTimeString("zh-CN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          }),
+        };
+        setHeardTranscripts((current) => [...current, entry].slice(-3));
+      }
+      await processTranscript(transcript);
+    },
+    [processTranscript],
+  );
+
   const {
     isSupported,
     isListening,
+    isTranscribing,
     interimTranscript,
     error: recognitionError,
     startListening,
     stopListening,
   } = useWhisperSpeechRecognition({
-    onFinalTranscript: processTranscript,
+    onFinalTranscript: handleFinalTranscript,
+    commandCaptureActive: isAwake,
   });
 
   useEffect(() => {
@@ -198,20 +243,114 @@ export default function VoiceControlPanel({
     [],
   );
 
-  const hasTranscript = Boolean(
-    lastTranscript || (isAwake && interimTranscript),
-  );
-  const showStatusPanel =
-    !isSupported ||
-    Boolean(recognitionError) ||
-    isListening ||
-    processing ||
-    hasTranscript ||
-    Boolean(lastResult);
+  const visibleUserText =
+    (isAwake && interimTranscript.trim()) || lastTranscript;
+  const debugStatus = recognitionError
+    ? "识别异常"
+    : isListening
+      ? isTranscribing
+        ? "正在识别"
+        : "监听中"
+      : "监听已暂停";
+  let interactionState: VoiceInteractionViewState;
+
+  if (!isSupported) {
+    interactionState = {
+      status: "unsupported",
+      statusLabel: "麦克风不可用",
+      userText: visibleUserText,
+      lumiText: "当前浏览器不支持麦克风录音，请使用最新版 Chrome 或 Edge。",
+    };
+  } else if (recognitionError || requestError) {
+    interactionState = {
+      status: "error",
+      statusLabel: "语音连接异常",
+      userText: visibleUserText,
+      lumiText:
+        requestError ||
+        recognitionError ||
+        "语音识别暂时不可用，请稍后重试。",
+    };
+  } else if (processing) {
+    interactionState = {
+      status: "processing",
+      statusLabel: "Lumi 正在理解",
+      userText: visibleUserText,
+      lumiText: "正在理解你的问题…",
+    };
+  } else if (isListening && isAwake) {
+    interactionState = {
+      status: "listening",
+      statusLabel: "Lumi 正在聆听",
+      userText: visibleUserText,
+      lumiText: lastResult?.responseText ?? "我在，请说出你的需求。",
+    };
+  } else if (isListening) {
+    interactionState = {
+      status: "standby",
+      statusLabel: "Lumi 待机中",
+      userText: visibleUserText,
+      lumiText: lastResult?.responseText ?? "",
+    };
+  } else {
+    interactionState = {
+      status: "off",
+      statusLabel: "语音未开启",
+      userText: visibleUserText,
+      lumiText: lastResult?.responseText ?? "",
+    };
+  }
+  useEffect(() => {
+    onInteractionChange?.(interactionState);
+  }, [
+    interactionState.lumiText,
+    interactionState.status,
+    interactionState.statusLabel,
+    interactionState.userText,
+    onInteractionChange,
+  ]);
 
   return (
     <>
-      <Stack gap={1.25}>
+      {debugPortalReady &&
+        createPortal(
+          <div
+            className="lumi-listening-debug"
+            role="status"
+            aria-live="polite"
+            aria-atomic="false"
+          >
+            <div className="lumi-listening-debug-header">
+              <span
+                className={`lumi-listening-debug-dot${
+                  isListening ? " is-listening" : ""
+                }`}
+                aria-hidden="true"
+              />
+              <span className="lumi-listening-debug-label">
+                Lumi 原始监听文字
+              </span>
+              <span className="lumi-listening-debug-state">{debugStatus}</span>
+            </div>
+            <div className="lumi-listening-debug-log">
+              {heardTranscripts.length > 0 ? (
+                heardTranscripts.map((entry) => (
+                  <div className="lumi-listening-debug-entry" key={entry.id}>
+                    <time>{entry.time}</time>
+                    <span>{entry.text}</span>
+                  </div>
+                ))
+              ) : (
+                <span className="lumi-listening-debug-empty">
+                  尚未识别到文字，请对着麦克风说话…
+                </span>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      <Stack className="lumi-voice-controls" gap={1.25}>
         <Stack direction={{ xs: "column", sm: "row" }} gap={1}>
           <Button
             fullWidth
@@ -256,59 +395,6 @@ export default function VoiceControlPanel({
             </Button>
           )}
         </Stack>
-
-        {showStatusPanel && (
-          <Stack gap={1}>
-            {!isSupported && (
-              <Alert severity="warning">
-                当前浏览器不支持麦克风录音，请使用最新版 Chrome 或 Edge。
-              </Alert>
-            )}
-
-            {recognitionError && (
-              <Alert severity="error">{recognitionError}</Alert>
-            )}
-
-            {(isListening || processing || hasTranscript) && (
-              <Box
-                sx={{
-                  minHeight: 68,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: 2,
-                  px: 2,
-                  py: 1.25,
-                }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  {isAwake ? "Lumi 已唤醒" : "Lumi 待机监听"}
-                </Typography>
-                <Typography mt={0.5} fontWeight={750}>
-                  {isAwake
-                    ? interimTranscript ||
-                      lastTranscript ||
-                      "我在，请说出你的需求。"
-                    : '待机中，请说“Lumi”唤醒'}
-                </Typography>
-              </Box>
-            )}
-
-            {processing && (
-              <Stack direction="row" alignItems="center" gap={1}>
-                <CircularProgress size={18} />
-                <Typography variant="body2">正在解析指令…</Typography>
-              </Stack>
-            )}
-
-            {lastResult && !processing && (
-              <Alert severity={lastResult.accepted ? "success" : "info"}>
-                <Typography fontWeight={850}>
-                  {lastResult.responseText}
-                </Typography>
-              </Alert>
-            )}
-          </Stack>
-        )}
       </Stack>
 
       <Snackbar

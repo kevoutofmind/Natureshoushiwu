@@ -37,10 +37,6 @@ import type {
   SkeletonSnapshot,
   VisionComparisonPayload,
 } from "@/features/video-stage/vision-types";
-import {
-  type VoiceCommandResult,
-  VoiceControlPanel,
-} from "@/features/voice-control";
 import { getPopularDances } from "@/features/popular-dances/api";
 import { getTeachingWorkspace } from "./api";
 import FloatingAiCoach from "./components/FloatingAiCoach";
@@ -60,7 +56,6 @@ import {
 } from "./lumi-motion-catalog";
 import { buildNeutralFailurePrompt } from "./neutral-feedback-vocabulary";
 import { passesRandomOnceEvaluation } from "./random-once-action-evaluation";
-import { executeRecordingVoiceCommand } from "./voiceCommandExecution";
 
 type RecordingState = "idle" | "camera-ready" | "recording" | "recorded";
 type LessonFlowStage =
@@ -167,6 +162,7 @@ export default function AITeachingPage({
     useState<CuratedMotionBreakdown | null>(null);
   const [referencePlaybackTimeMs, setReferencePlaybackTimeMs] = useState(0);
   const [referencePlaying, setReferencePlaying] = useState(false);
+  const [referencePlaybackRate, setReferencePlaybackRate] = useState(1);
   const [showLiveSkeleton, setShowLiveSkeleton] = useState(false);
   const [liveSkeleton, setLiveSkeleton] = useState<SkeletonSnapshot | null>(
     null,
@@ -195,7 +191,8 @@ export default function AITeachingPage({
   const passTransitionTimerRef = useRef<number | null>(null);
   const recordingCountdownTimerRef = useRef<number | null>(null);
   const evaluationVisibleFrameCountRef = useRef(0);
-  const failedEvaluationKeysRef = useRef(new Set<string>());
+  const hasEvaluatedRef = useRef(false);
+  const mustPassAfterFailureRef = useRef(false);
   const segmentEndReachedRef = useRef(false);
   const referenceStageRef = useRef<HTMLDivElement>(null);
   const {
@@ -218,7 +215,6 @@ export default function AITeachingPage({
   } = useVlmTeachingFeedback();
   const {
     ingestSkeleton,
-    handleVoiceResult,
     runtimeStatus,
     buildProgress,
     referenceVideoUrl,
@@ -233,10 +229,6 @@ export default function AITeachingPage({
     getTeachingWorkspace(activeDanceId).catch((reason: unknown) =>
       setError(reason instanceof Error ? reason.message : "工作台加载失败。"),
     );
-  }, [activeDanceId]);
-
-  useEffect(() => {
-    failedEvaluationKeysRef.current.clear();
   }, [activeDanceId]);
 
   useEffect(() => {
@@ -348,23 +340,41 @@ export default function AITeachingPage({
     return "四个动作都完成了，可以开始录制你的完整版本。";
   })();
 
+  const playReferencePlayback = useCallback(() => {
+    const video = referenceVideoRef.current;
+    if (!video) return;
+    if (
+      selectedMotionEndMs > 0 &&
+      video.currentTime * 1000 >= selectedMotionEndMs - 40
+    ) {
+      video.currentTime = 0;
+      setReferencePlaybackTimeMs(0);
+      segmentEndReachedRef.current = false;
+    }
+    void video.play().catch(() => undefined);
+  }, [selectedMotionEndMs]);
+
+  const pauseReferencePlayback = useCallback(() => {
+    referenceVideoRef.current?.pause();
+  }, []);
+
   const toggleSegmentPlayback = useCallback(() => {
     const video = referenceVideoRef.current;
     if (!video) return;
     if (video.paused) {
-      if (
-        selectedMotionEndMs > 0 &&
-        video.currentTime * 1000 >= selectedMotionEndMs - 40
-      ) {
-        video.currentTime = 0;
-        setReferencePlaybackTimeMs(0);
-        segmentEndReachedRef.current = false;
-      }
-      void video.play().catch(() => undefined);
+      playReferencePlayback();
       return;
     }
-    video.pause();
-  }, [selectedMotionEndMs]);
+    pauseReferencePlayback();
+  }, [pauseReferencePlayback, playReferencePlayback]);
+
+  const changeReferencePlaybackRate = useCallback((rate: 0.5 | 1) => {
+    setReferencePlaybackRate(rate);
+    const video = referenceVideoRef.current;
+    if (!video) return;
+    video.defaultPlaybackRate = rate;
+    video.playbackRate = rate;
+  }, []);
 
   const seekSegmentPlayback = useCallback(
     (_event: Event, value: number | number[]) => {
@@ -671,10 +681,12 @@ export default function AITeachingPage({
 
   const finishEvaluation = useCallback(() => {
     const targetIndex = selectedLessonEndIndexRef.current ?? selectedMotionEnd;
-    const evaluationKey = `${activeDanceId}:${targetIndex}`;
-    const hasFailedBefore = failedEvaluationKeysRef.current.has(evaluationKey);
-    const passed = passesRandomOnceEvaluation(hasFailedBefore);
-    if (!passed) failedEvaluationKeysRef.current.add(evaluationKey);
+    const passed = passesRandomOnceEvaluation(
+      hasEvaluatedRef.current,
+      mustPassAfterFailureRef.current,
+    );
+    hasEvaluatedRef.current = true;
+    mustPassAfterFailureRef.current = !passed;
     const neutralFailurePrompt = buildNeutralFailurePrompt({
       danceId: activeDanceId,
       actionIndex: targetIndex,
@@ -932,62 +944,6 @@ export default function AITeachingPage({
     if (streamRef.current) beginRecordingCountdown();
   };
 
-  const handlePageVoiceResult = (result: VoiceCommandResult) => {
-    if (!result.accepted || !result.command.intent) return;
-
-    if (result.command.intent === "START_EVALUATION") {
-      beginEvaluation();
-      return;
-    }
-    if (result.command.intent === "SKIP_TO_OVERVIEW") {
-      returnToOverview();
-      return;
-    }
-    if (result.command.intent === "RETRY_PRACTICE") {
-      retryCurrentTraining();
-      return;
-    }
-    if (result.command.intent === "SHOW_SKELETON") {
-      setShowLiveSkeleton(true);
-      return;
-    }
-    if (result.command.intent === "HIDE_SKELETON") {
-      setShowLiveSkeleton(false);
-      return;
-    }
-
-    const recordingHandled = executeRecordingVoiceCommand(result, {
-      start: startRecordingFromVoice,
-      stop: stopRecording,
-    });
-    if (recordingHandled) return;
-
-    if (result.command.intent === "NEXT_ACTION") {
-      const current = selectedLessonEndIndexRef.current;
-      if (lessonFlowStage === "overview" || lessonFlowStage === "completed") {
-        startTrainingFromMotion(Math.min(ACTION_COUNT - 1, completedThroughIndex + 1));
-      } else if (current != null) {
-        startTrainingFromMotion(Math.min(ACTION_COUNT - 1, current + 1));
-      }
-      return;
-    }
-    if (result.command.intent === "PREVIOUS_ACTION") {
-      const current = selectedLessonEndIndexRef.current ?? trainingClipIndex;
-      startTrainingFromMotion(Math.max(0, current - 1));
-      return;
-    }
-    if (result.command.intent === "REPEAT_ACTION") {
-      retryCurrentTraining();
-      return;
-    }
-    if (result.command.intent === "RESTART_LESSON") {
-      failedEvaluationKeysRef.current.clear();
-      startTrainingFromMotion(0);
-      return;
-    }
-
-    handleVoiceResult(result);
-  };
   const storeDraft = async () => {
     if (!recordedBlob) return;
     setSaving(true);
@@ -1355,12 +1311,6 @@ export default function AITeachingPage({
                   导出 JSON
                 </Button>
               )}
-              <Box className="studio-voice-control">
-                <VoiceControlPanel
-                  autoListen={lessonFlowStage === "training"}
-                  onCommandRecognized={handlePageVoiceResult}
-                />
-              </Box>
             </Stack>
           </Box>
         </Box>
@@ -1374,7 +1324,36 @@ export default function AITeachingPage({
             speech={coachSpeech}
             review={evaluationResult}
             onFinishIntro={() => undefined}
-          />
+          >
+            <Button
+              size="small"
+              variant={referencePlaying ? "outlined" : "contained"}
+              onClick={pauseReferencePlayback}
+            >
+              暂停
+            </Button>
+            <Button
+              size="small"
+              variant={referencePlaying ? "contained" : "outlined"}
+              onClick={playReferencePlayback}
+            >
+              播放
+            </Button>
+            <Button
+              size="small"
+              variant={referencePlaybackRate === 0.5 ? "contained" : "outlined"}
+              onClick={() => changeReferencePlaybackRate(0.5)}
+            >
+              0.5倍速
+            </Button>
+            <Button
+              size="small"
+              variant={referencePlaybackRate === 1 ? "contained" : "outlined"}
+              onClick={() => changeReferencePlaybackRate(1)}
+            >
+              1倍速
+            </Button>
+          </FloatingAiCoach>
         )}
         {lumiStage === "intro" && (
           <LumiMotionIntro

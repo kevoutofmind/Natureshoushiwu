@@ -15,8 +15,12 @@ interface WhisperTranscriptionResponse {
   model?: string;
 }
 
-const DEFAULT_WHISPER_PROMPT =
-  '这是一款名为 Lumi 的中文手势舞教学助手。常用词和口令包括：Lumi，准备，第一拍，第二拍，收势，显示骨架，关闭骨架，暂停，继续，慢一点，快一点，上一个动作，下一个动作，再来一遍，从头开始，开始评估，回到主界面，重新练习。';
+const REQUIRED_WHISPER_PROMPT =
+  '请仅使用简体中文或英文转写，中文统一使用简体字。这是一款名为 Lumi 的中文手势舞教学助手。Lumi 的提示词包括：卢米，鲁米，Lumi，鲁密，卢密，LuMi。';
+const DEFAULT_WHISPER_VOCABULARY =
+  '常用口令包括：准备，第一拍，第二拍，收势，显示骨架，关闭骨架，暂停，继续，慢一点，快一点，上一个动作，下一个动作，再来一遍，从头开始，开始评估，回到主界面，重新练习。';
+
+const LUMI_PROMPT_WORD_PATTERN = /\bLumi\b|卢米|鲁米|鲁密|卢密/giu;
 
 export interface WhisperAudioFile {
   buffer: Buffer;
@@ -36,11 +40,12 @@ export class WhisperTranscriptionService {
     'https://api.openai.com/v1/audio/transcriptions';
   private readonly model =
     process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'whisper-1';
-  private readonly language =
-    process.env.OPENAI_TRANSCRIPTION_LANGUAGE ?? 'zh';
-  private readonly prompt =
-    process.env.OPENAI_TRANSCRIPTION_PROMPT?.trim() ??
-    DEFAULT_WHISPER_PROMPT;
+  private readonly language = requestedTranscriptionLanguage(
+    process.env.OPENAI_TRANSCRIPTION_LANGUAGE,
+  );
+  private readonly prompt = transcriptionPrompt(
+    process.env.OPENAI_TRANSCRIPTION_PROMPT,
+  );
   private readonly timeoutMs = positiveInteger(
     process.env.OPENAI_TRANSCRIPTION_TIMEOUT_MS,
     30000,
@@ -87,7 +92,7 @@ export class WhisperTranscriptionService {
       file.originalname || 'voice-command.webm',
     );
     form.append('model', this.model);
-    form.append('language', this.language);
+    if (this.language) form.append('language', this.language);
     if (this.prompt) form.append('prompt', this.prompt);
     form.append('response_format', 'json');
     form.append('temperature', '0');
@@ -126,7 +131,7 @@ export class WhisperTranscriptionService {
 
       const payload = (await response.json()) as WhisperTranscriptionResponse;
       return {
-        text: payload.text?.trim() ?? '',
+        text: normalizeTranscriptionText(payload.text),
         model: this.model,
       };
     } catch (error: unknown) {
@@ -159,7 +164,7 @@ export class WhisperTranscriptionService {
     model: string;
   }> {
     const form = createAudioForm(file);
-    form.append('language', this.language);
+    if (this.language) form.append('language', this.language);
     if (this.prompt) {
       form.append('initial_prompt', this.prompt);
     }
@@ -185,7 +190,7 @@ export class WhisperTranscriptionService {
 
       const payload = (await response.json()) as WhisperTranscriptionResponse;
       return {
-        text: payload.text?.trim() ?? '',
+        text: normalizeTranscriptionText(payload.text),
         model: payload.model?.trim() || 'local-whisper',
       };
     } catch (error: unknown) {
@@ -198,9 +203,7 @@ export class WhisperTranscriptionService {
         }`,
       );
       throw new BadGatewayException({
-        code: timedOut
-          ? 'LOCAL_WHISPER_TIMEOUT'
-          : 'LOCAL_WHISPER_UNAVAILABLE',
+        code: timedOut ? 'LOCAL_WHISPER_TIMEOUT' : 'LOCAL_WHISPER_UNAVAILABLE',
         message: timedOut
           ? '本地 Whisper 转写超时，请稍后重试。'
           : '本地 Whisper 尚未启动，请运行 voice-control/local-whisper/start.ps1。',
@@ -228,6 +231,25 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function normalizeTranscriptionText(text: string | undefined): string {
+  return (text ?? '').replace(LUMI_PROMPT_WORD_PATTERN, 'Lumi').trim();
+}
+
+function requestedTranscriptionLanguage(
+  value: string | undefined,
+): 'zh' | 'en' | undefined {
+  const normalized = value?.trim().toLowerCase().replaceAll('_', '-') ?? '';
+  if (normalized === 'en' || normalized.startsWith('en-')) return 'en';
+  if (normalized === 'zh' || normalized.startsWith('zh-')) return 'zh';
+  return undefined;
+}
+
+function transcriptionPrompt(projectVocabulary: string | undefined): string {
+  return `${REQUIRED_WHISPER_PROMPT}${
+    projectVocabulary?.trim() || DEFAULT_WHISPER_VOCABULARY
+  }`;
+}
+
 function createProxyDispatcher(): Dispatcher | undefined {
   const explicitProxy = process.env.OPENAI_PROXY_URL?.trim();
   if (explicitProxy) {
@@ -242,10 +264,10 @@ function createProxyDispatcher(): Dispatcher | undefined {
 function hasProxyEnvironment(): boolean {
   return Boolean(
     process.env.HTTPS_PROXY ??
-      process.env.https_proxy ??
-      process.env.HTTP_PROXY ??
-      process.env.http_proxy ??
-      process.env.ALL_PROXY ??
-      process.env.all_proxy,
+    process.env.https_proxy ??
+    process.env.HTTP_PROXY ??
+    process.env.http_proxy ??
+    process.env.ALL_PROXY ??
+    process.env.all_proxy,
   );
 }

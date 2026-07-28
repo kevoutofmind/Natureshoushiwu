@@ -233,7 +233,14 @@ export class VoiceControlService {
       cues.some((cue) => text.includes(cue));
 
     if (
-      hasAny('没看清', '没学会', '不太明白', '不会做', '帮我拆解') &&
+      hasAny(
+        '没看清',
+        '没有看清',
+        '没学会',
+        '不太明白',
+        '不会做',
+        '帮我拆解',
+      ) &&
       hasAny('动作', '刚才', '示范', '这个')
     ) {
       return this.command(

@@ -1,4 +1,7 @@
-import { BadGatewayException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { WhisperTranscriptionService } from './whisper-transcription.service';
 
 describe('WhisperTranscriptionService', () => {
@@ -7,6 +10,7 @@ describe('WhisperTranscriptionService', () => {
     model: process.env.OPENAI_TRANSCRIPTION_MODEL,
     url: process.env.OPENAI_AUDIO_TRANSCRIPTION_URL,
     prompt: process.env.OPENAI_TRANSCRIPTION_PROMPT,
+    language: process.env.OPENAI_TRANSCRIPTION_LANGUAGE,
     provider: process.env.VOICE_TRANSCRIPTION_PROVIDER,
     localUrl: process.env.LOCAL_WHISPER_URL,
   };
@@ -17,6 +21,7 @@ describe('WhisperTranscriptionService', () => {
     restore('OPENAI_TRANSCRIPTION_MODEL', originalEnvironment.model);
     restore('OPENAI_AUDIO_TRANSCRIPTION_URL', originalEnvironment.url);
     restore('OPENAI_TRANSCRIPTION_PROMPT', originalEnvironment.prompt);
+    restore('OPENAI_TRANSCRIPTION_LANGUAGE', originalEnvironment.language);
     restore('VOICE_TRANSCRIPTION_PROVIDER', originalEnvironment.provider);
     restore('LOCAL_WHISPER_URL', originalEnvironment.localUrl);
   });
@@ -28,7 +33,7 @@ describe('WhisperTranscriptionService', () => {
     process.env.OPENAI_AUDIO_TRANSCRIPTION_URL =
       'https://api.openai.test/v1/audio/transcriptions';
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ text: '显示骨架' }), {
+      new Response(JSON.stringify({ text: '鲁密，显示骨架' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -41,7 +46,7 @@ describe('WhisperTranscriptionService', () => {
       size: 10,
     });
 
-    expect(result).toEqual({ text: '显示骨架', model: 'whisper-1' });
+    expect(result).toEqual({ text: 'Lumi，显示骨架', model: 'whisper-1' });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.openai.test/v1/audio/transcriptions',
       expect.objectContaining({
@@ -52,14 +57,71 @@ describe('WhisperTranscriptionService', () => {
     );
     const request = fetchMock.mock.calls[0][1] as RequestInit;
     const form = request.body as FormData;
+    expect(form.get('language')).toBeNull();
+    expect(form.get('prompt')).toContain('简体中文或英文');
+    expect(form.get('prompt')).toContain('卢米，鲁米，Lumi，鲁密，卢密，LuMi');
     expect(form.get('prompt')).toContain('显示骨架');
     expect(form.get('prompt')).toContain('关闭骨架');
   });
 
-  it('allows a project vocabulary prompt to override the default terms', async () => {
+  it.each(['卢米', '鲁米', 'Lumi', '鲁密', '卢密', 'LuMi'])(
+    'normalizes the transcription prompt word %s before returning text',
+    async (promptWord) => {
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+      process.env.VOICE_TRANSCRIPTION_PROVIDER = 'openai';
+      jest.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ text: `${promptWord}，暂停` }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+      const result = await new WhisperTranscriptionService().transcribe({
+        buffer: Buffer.from('webm-audio'),
+        mimetype: 'audio/webm',
+        originalname: 'command.webm',
+        size: 10,
+      });
+
+      expect(result.text).toBe('Lumi，暂停');
+    },
+  );
+
+  it.each([
+    ['zh-CN', 'zh'],
+    ['en-US', 'en'],
+    ['ja', null],
+    ['auto', null],
+  ])(
+    'limits the requested transcription language %s to %s',
+    async (configured, expected) => {
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+      process.env.VOICE_TRANSCRIPTION_PROVIDER = 'openai';
+      process.env.OPENAI_TRANSCRIPTION_LANGUAGE = configured;
+      const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ text: 'Lumi' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+      await new WhisperTranscriptionService().transcribe({
+        buffer: Buffer.from('webm-audio'),
+        mimetype: 'audio/webm',
+        originalname: 'command.webm',
+        size: 10,
+      });
+
+      const request = fetchMock.mock.calls[0][1] as RequestInit;
+      expect((request.body as FormData).get('language')).toBe(expected);
+    },
+  );
+
+  it('appends project vocabulary after the required language and prompt words', async () => {
     process.env.OPENAI_API_KEY = 'test-openai-key';
     process.env.VOICE_TRANSCRIPTION_PROVIDER = 'openai';
-    process.env.OPENAI_TRANSCRIPTION_PROMPT = 'Lumi，准备，第一拍，第二拍，收势。';
+    process.env.OPENAI_TRANSCRIPTION_PROMPT =
+      'Lumi，准备，第一拍，第二拍，收势。';
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ text: '第一拍' }), {
         status: 200,
@@ -75,9 +137,10 @@ describe('WhisperTranscriptionService', () => {
     });
 
     const request = fetchMock.mock.calls[0][1] as RequestInit;
-    expect((request.body as FormData).get('prompt')).toBe(
-      'Lumi，准备，第一拍，第二拍，收势。',
-    );
+    const prompt = (request.body as FormData).get('prompt');
+    expect(prompt).toContain('仅使用简体中文或英文转写');
+    expect(prompt).toContain('卢米，鲁米，Lumi，鲁密，卢密，LuMi');
+    expect(prompt).toContain('Lumi，准备，第一拍，第二拍，收势。');
   });
 
   it('fails clearly when the OpenAI API key is missing', async () => {
@@ -97,9 +160,9 @@ describe('WhisperTranscriptionService', () => {
   it('maps an upstream error to a stable backend error', async () => {
     process.env.OPENAI_API_KEY = 'test-openai-key';
     process.env.VOICE_TRANSCRIPTION_PROVIDER = 'openai';
-    jest.spyOn(global, 'fetch').mockResolvedValue(
-      new Response('unauthorized', { status: 401 }),
-    );
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response('unauthorized', { status: 401 }));
 
     await expect(
       new WhisperTranscriptionService().transcribe({
@@ -116,7 +179,7 @@ describe('WhisperTranscriptionService', () => {
     process.env.LOCAL_WHISPER_URL = 'http://127.0.0.1:8765/transcribe';
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(
-        JSON.stringify({ text: '关闭骨架', model: 'local/small' }),
+        JSON.stringify({ text: '卢密，关闭骨架', model: 'local/small' }),
         {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -131,14 +194,11 @@ describe('WhisperTranscriptionService', () => {
       size: 10,
     });
 
-    expect(result).toEqual({ text: '关闭骨架', model: 'local/small' });
-    const [url, request] = fetchMock.mock.calls[0] as [
-      string,
-      RequestInit,
-    ];
+    expect(result).toEqual({ text: 'Lumi，关闭骨架', model: 'local/small' });
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('http://127.0.0.1:8765/transcribe');
     const form = request.body as FormData;
-    expect(form.get('language')).toBe('zh');
+    expect(form.get('language')).toBeNull();
     expect(form.get('initial_prompt')).toContain('显示骨架');
     expect(form.get('hotwords')).toBeNull();
   });

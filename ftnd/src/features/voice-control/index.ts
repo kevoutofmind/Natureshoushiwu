@@ -9,4 +9,6 @@ export type {
   VoiceCommandParameters,
   VoiceCommandResult,
   VoiceControlStatus,
+  VoiceInteractionStatus,
+  VoiceInteractionViewState,
 } from './types';

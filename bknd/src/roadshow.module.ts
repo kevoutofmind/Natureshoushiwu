@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { RouterModule } from '@nestjs/core';
 import { AiTeachingModule } from './ai-teaching/ai-teaching.module';
 import { VlmCoreModule } from './vlm-core';
+import { VoiceControlModule } from './voice-control';
 
 /**
  * Database-free runtime used by the H5 teaching demo.
@@ -16,6 +17,7 @@ import { VlmCoreModule } from './vlm-core';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     AiTeachingModule,
+    VoiceControlModule,
     RouterModule.register([{ path: 'api', module: VlmCoreModule }]),
   ],
 })

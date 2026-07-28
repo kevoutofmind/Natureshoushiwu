@@ -14,8 +14,9 @@ MODEL_NAME = os.getenv("LOCAL_WHISPER_MODEL", "small")
 DEVICE = os.getenv("LOCAL_WHISPER_DEVICE", "cpu")
 COMPUTE_TYPE = os.getenv("LOCAL_WHISPER_COMPUTE_TYPE", "int8")
 CPU_THREADS = max(1, int(os.getenv("LOCAL_WHISPER_CPU_THREADS", "12")))
-DEFAULT_LANGUAGE = os.getenv("LOCAL_WHISPER_LANGUAGE", "zh")
+DEFAULT_LANGUAGE = os.getenv("LOCAL_WHISPER_LANGUAGE", "auto")
 DEFAULT_PROMPT = os.getenv("LOCAL_WHISPER_PROMPT", "")
+SUPPORTED_LANGUAGES = {"zh", "en"}
 
 app = FastAPI(title="Lumi Local Whisper", version="1.0.0")
 model: WhisperModel | None = None
@@ -36,6 +37,12 @@ def get_model() -> WhisperModel:
     return model
 
 
+def supported_language(language: str) -> str | None:
+    normalized = language.strip().lower().replace("_", "-")
+    primary_language = normalized.split("-", maxsplit=1)[0]
+    return primary_language if primary_language in SUPPORTED_LANGUAGES else None
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
     return {
@@ -45,6 +52,8 @@ def health() -> dict[str, object]:
         "device": DEVICE,
         "computeType": COMPUTE_TYPE,
         "loaded": model is not None,
+        "languages": sorted(SUPPORTED_LANGUAGES),
+        "defaultLanguage": supported_language(DEFAULT_LANGUAGE) or "auto",
     }
 
 
@@ -63,14 +72,20 @@ def transcribe(
             while chunk := file.file.read(1024 * 1024):
                 audio.write(chunk)
 
+        transcription_language = supported_language(language or DEFAULT_LANGUAGE)
         with model_lock:
             segments, _ = get_model().transcribe(
                 temporary_path,
-                language=language or DEFAULT_LANGUAGE,
+                language=transcription_language,
                 task="transcribe",
                 beam_size=5,
                 temperature=0,
                 vad_filter=True,
+                vad_parameters={
+                    "min_speech_duration_ms": 50,
+                    "min_silence_duration_ms": 250,
+                    "speech_pad_ms": 200,
+                },
                 initial_prompt=initial_prompt or DEFAULT_PROMPT or None,
                 hotwords=hotwords or None,
                 condition_on_previous_text=False,

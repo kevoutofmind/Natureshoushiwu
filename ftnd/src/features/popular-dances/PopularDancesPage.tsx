@@ -205,7 +205,6 @@ export default function PopularDancesPage() {
                         <PlayCircleOutlineRoundedIcon />
                       )}
                     </IconButton>
-                    <Typography fontWeight={950}>{dance.title}</Typography>
                   </Box>
                 </Box>
                 <CardContent>

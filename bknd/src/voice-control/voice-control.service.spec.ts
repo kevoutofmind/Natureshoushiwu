@@ -17,8 +17,17 @@ describe('VoiceControlService', () => {
     ['开始录制', 'START_RECORDING'],
     ['停止录制', 'STOP_RECORDING'],
     ['刚才这个动作我没看清，能不能再教我一次', 'REPEAT_ACTION'],
+    ['这个动作我没有看清楚', 'REPEAT_ACTION'],
     ['这个我已经会了，我们继续往下学吧', 'NEXT_ACTION'],
     ['我有点跟不上，先等我一下', 'PAUSE'],
+    ['pause', 'PAUSE'],
+    ['continue', 'RESUME'],
+    ['slow down', 'SLOW_DOWN'],
+    ['speed up', 'SPEED_UP'],
+    ['previous action', 'PREVIOUS_ACTION'],
+    ['repeat', 'REPEAT_ACTION'],
+    ['next action', 'NEXT_ACTION'],
+    ['start over', 'RESTART_LESSON'],
   ])('recognizes "%s" as %s', (transcript, intent) => {
     const result = service.interpret(transcript);
 

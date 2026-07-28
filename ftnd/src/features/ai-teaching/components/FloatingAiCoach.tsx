@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import LiquidGlass from "liquid-glass-react";
+import type { VoiceInteractionViewState } from "@/features/voice-control";
 import type { MotionSemanticBreakdown } from "@/features/video-stage/reference-dataset.types";
 import LumiWebGLParticleField from "./LumiWebGLParticleField";
 
@@ -24,6 +25,7 @@ interface FloatingAiCoachProps {
   phaseLabel: string;
   speech: string;
   review?: { headline: string; detail: string } | null;
+  voice?: VoiceInteractionViewState;
   onFinishIntro: () => void;
   children?: ReactNode;
 }
@@ -46,6 +48,7 @@ export default function FloatingAiCoach({
   phaseLabel,
   speech,
   review,
+  voice,
   onFinishIntro,
   children,
 }: FloatingAiCoachProps) {
@@ -99,7 +102,13 @@ export default function FloatingAiCoach({
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (introOpen || event.button !== 0) return;
-    if ((event.target as HTMLElement).closest("button")) return;
+    if (
+      (event.target as HTMLElement).closest(
+        "button, .lumi-conversation",
+      )
+    ) {
+      return;
+    }
     const coach = coachRef.current;
     if (!coach) return;
     const rect = coach.getBoundingClientRect();
@@ -170,16 +179,20 @@ export default function FloatingAiCoach({
   const floatingStyle: CSSProperties = position
     ? { left: position.left, top: position.top }
     : { right: 20, top: 84 };
+  const hasConversation = Boolean(voice?.userText || voice?.lumiText);
   const hostClassName = [
     "lumi-glass-host",
     review ? "has-review" : "",
+    hasConversation ? "has-conversation" : "",
     children ? "has-actions" : "",
   ]
     .filter(Boolean)
     .join(" ");
-  const glassVariant = `${review ? "review" : "plain"}-${
-    children ? "actions" : "idle"
-  }`;
+  const glassVariant = [
+    review ? "review" : "plain",
+    hasConversation ? "conversation" : "quiet",
+    children ? "actions" : "idle",
+  ].join("-");
 
   return (
     <div
@@ -222,12 +235,38 @@ export default function FloatingAiCoach({
             <header className="lumi-glass-header">
               <span className="lumi-status-dot" aria-hidden="true" />
               <strong>Lumi</strong>
-              <small>{phaseLabel}</small>
+              <div className="lumi-header-meta">
+                <span>{phaseLabel}</span>
+                {voice && (
+                  <small aria-live="polite">{voice.statusLabel}</small>
+                )}
+              </div>
             </header>
 
             <p className="lumi-current-line" aria-live="polite">
               {speech}
             </p>
+
+            {hasConversation && (
+              <section
+                className="lumi-conversation"
+                aria-label="Lumi 语音对话"
+                aria-live="polite"
+              >
+                {voice?.userText && (
+                  <article className="lumi-chat-turn is-user">
+                    <span>你</span>
+                    <p>{voice.userText}</p>
+                  </article>
+                )}
+                {voice?.lumiText && (
+                  <article className="lumi-chat-turn is-lumi">
+                    <span>Lumi</span>
+                    <p>{voice.lumiText}</p>
+                  </article>
+                )}
+              </section>
+            )}
 
             {review && (
               <div className="lumi-review">

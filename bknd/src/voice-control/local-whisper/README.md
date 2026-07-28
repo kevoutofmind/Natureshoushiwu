@@ -46,9 +46,17 @@ LOCAL_WHISPER_COMPUTE_TYPE=int8
 LOCAL_WHISPER_CPU_THREADS=12
 ```
 
-The Nest backend sends its `OPENAI_TRANSCRIPTION_PROMPT` value as
-`initial_prompt`, so the existing Lumi vocabulary works for local and hosted
-Whisper without maintaining two word lists. Strong `hotwords` injection is
+Transcription language is limited to Simplified Chinese (`zh`) or English
+(`en`). The default is `zh`, which still permits English product names and
+commands in mixed Chinese speech. The transcription prompt asks Whisper to
+emit Chinese text with simplified characters.
+
+The Nest transcription layer always prepends its Simplified Chinese/English
+constraint and Lumi prompt words (卢米、鲁米、Lumi、鲁密、卢密、LuMi), then
+appends `OPENAI_TRANSCRIPTION_PROMPT` as optional project vocabulary. It sends
+the combined prompt as `initial_prompt`, so the same behavior works for local
+and hosted Whisper without maintaining two word lists. Strong `hotwords`
+injection is
 intentionally disabled because it can turn music or ambient noise into a false
 navigation command.
 

@@ -5,12 +5,14 @@ import { transcribeVoiceAudio } from "../api";
 
 interface UseWhisperSpeechRecognitionOptions {
   onFinalTranscript: (transcript: string) => void | Promise<void>;
+  commandCaptureActive?: boolean;
 }
 
-const RECORDING_CHUNK_MS = 2500;
+const RECORDING_CHUNK_MS = 1500;
 const MIN_AUDIO_BYTES = 1024;
-const SPEECH_RMS_THRESHOLD = 0.015;
-const MIN_SPEECH_FRAMES = 3;
+const SPEECH_RMS_THRESHOLD = 0.0025;
+const MIN_SPEECH_FRAMES = 1;
+const MIN_COMMAND_SPEECH_FRAMES = 1;
 const MIME_TYPE_CANDIDATES = [
   "audio/webm;codecs=opus",
   "audio/webm",
@@ -20,6 +22,7 @@ const MIME_TYPE_CANDIDATES = [
 
 export function useWhisperSpeechRecognition({
   onFinalTranscript,
+  commandCaptureActive = false,
 }: UseWhisperSpeechRecognitionOptions) {
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -28,14 +31,18 @@ export function useWhisperSpeechRecognition({
   const speechMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chunkPartsRef = useRef<Blob[]>([]);
   const speechFrameCountRef = useRef(0);
+  const speechGateAvailableRef = useRef(false);
+  const discardCurrentChunkRef = useRef(false);
   const isStartingRef = useRef(false);
   const keepListeningRef = useRef(false);
   const transcriptionQueueRef = useRef(Promise.resolve());
   const pendingTranscriptionsRef = useRef(0);
+  const commandCaptureActiveRef = useRef(commandCaptureActive);
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const startChunkRef = useRef<() => void>(() => undefined);
   const [isSupported, setIsSupported] = useState(true);
   const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const [error, setError] = useState("");
 
@@ -46,6 +53,9 @@ export function useWhisperSpeechRecognition({
   const releaseCapture = useCallback(() => {
     isStartingRef.current = false;
     keepListeningRef.current = false;
+    commandCaptureActiveRef.current = false;
+    speechGateAvailableRef.current = false;
+    discardCurrentChunkRef.current = false;
     if (chunkTimerRef.current) {
       clearTimeout(chunkTimerRef.current);
       chunkTimerRef.current = null;
@@ -71,7 +81,7 @@ export function useWhisperSpeechRecognition({
   const queueTranscription = useCallback(
     (audio: Blob) => {
       pendingTranscriptionsRef.current += 1;
-      setInterimTranscript("正在通过 Whisper 识别…");
+      setIsTranscribing(true);
 
       transcriptionQueueRef.current = transcriptionQueueRef.current
         .catch(() => undefined)
@@ -79,6 +89,7 @@ export function useWhisperSpeechRecognition({
           try {
             const result = await transcribeVoiceAudio(audio);
             const transcript = result.text.trim();
+            setError("");
             if (transcript) {
               setInterimTranscript(transcript);
               await onFinalTranscriptRef.current(transcript);
@@ -89,19 +100,16 @@ export function useWhisperSpeechRecognition({
                 ? reason.message
                 : "Whisper 语音识别暂时不可用。",
             );
-            releaseCapture();
           } finally {
             pendingTranscriptionsRef.current = Math.max(
               0,
               pendingTranscriptionsRef.current - 1,
             );
-            if (pendingTranscriptionsRef.current === 0) {
-              setInterimTranscript("");
-            }
+            setIsTranscribing(pendingTranscriptionsRef.current > 0);
           }
         });
     },
-    [releaseCapture],
+    [],
   );
 
   const startChunk = useCallback(() => {
@@ -110,6 +118,7 @@ export function useWhisperSpeechRecognition({
 
     chunkPartsRef.current = [];
     speechFrameCountRef.current = 0;
+    const isCommandCaptureChunk = commandCaptureActiveRef.current;
     const mimeType = selectSupportedMimeType();
     const recorder = mimeType
       ? new MediaRecorder(stream, { mimeType })
@@ -133,9 +142,16 @@ export function useWhisperSpeechRecognition({
       const audio = new Blob(chunkPartsRef.current, {
         type: recorder.mimeType || mimeType || "audio/webm",
       });
+      const discardStoppedChunk = discardCurrentChunkRef.current;
+      discardCurrentChunkRef.current = false;
       const shouldTranscribe =
+        !discardStoppedChunk &&
         keepListeningRef.current &&
-        speechFrameCountRef.current >= MIN_SPEECH_FRAMES &&
+        (speechFrameCountRef.current >=
+          (isCommandCaptureChunk
+            ? MIN_COMMAND_SPEECH_FRAMES
+            : MIN_SPEECH_FRAMES) ||
+          !speechGateAvailableRef.current) &&
         audio.size >= MIN_AUDIO_BYTES;
 
       if (keepListeningRef.current) {
@@ -155,6 +171,20 @@ export function useWhisperSpeechRecognition({
   useEffect(() => {
     startChunkRef.current = startChunk;
   }, [startChunk]);
+
+  useEffect(() => {
+    commandCaptureActiveRef.current = commandCaptureActive;
+    if (!commandCaptureActive) return;
+
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    discardCurrentChunkRef.current = true;
+    if (chunkTimerRef.current) {
+      clearTimeout(chunkTimerRef.current);
+      chunkTimerRef.current = null;
+    }
+    recorder.stop();
+  }, [commandCaptureActive]);
 
   useEffect(() => {
     const supported =
@@ -186,7 +216,6 @@ export function useWhisperSpeechRecognition({
 
     isStartingRef.current = true;
     setError("");
-    setInterimTranscript("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -200,12 +229,16 @@ export function useWhisperSpeechRecognition({
       isStartingRef.current = false;
       keepListeningRef.current = true;
       setIsListening(true);
-      await startSpeechMonitor(
-        stream,
-        audioContextRef,
-        speechMonitorRef,
-        speechFrameCountRef,
-      );
+      try {
+        speechGateAvailableRef.current = await startSpeechMonitor(
+          stream,
+          audioContextRef,
+          speechMonitorRef,
+          speechFrameCountRef,
+        );
+      } catch {
+        speechGateAvailableRef.current = false;
+      }
       startChunkRef.current();
     } catch (reason) {
       releaseCapture();
@@ -215,12 +248,12 @@ export function useWhisperSpeechRecognition({
 
   const stopListening = useCallback(() => {
     releaseCapture();
-    setInterimTranscript("");
   }, [releaseCapture]);
 
   return {
     isSupported,
     isListening,
+    isTranscribing,
     interimTranscript,
     error,
     startListening,
@@ -241,9 +274,13 @@ async function startSpeechMonitor(
   audioContextRef: React.MutableRefObject<AudioContext | null>,
   speechMonitorRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
   speechFrameCountRef: React.MutableRefObject<number>,
-): Promise<void> {
+): Promise<boolean> {
   const audioContext = new AudioContext();
   await audioContext.resume();
+  if (audioContext.state !== "running") {
+    await audioContext.close();
+    return false;
+  }
   const source = audioContext.createMediaStreamSource(stream);
   const analyser = audioContext.createAnalyser();
   analyser.fftSize = 1024;
@@ -255,10 +292,12 @@ async function startSpeechMonitor(
     analyser.getFloatTimeDomainData(samples);
     let squareSum = 0;
     for (const sample of samples) squareSum += sample * sample;
-    if (Math.sqrt(squareSum / samples.length) >= SPEECH_RMS_THRESHOLD) {
+    const rms = Math.sqrt(squareSum / samples.length);
+    if (rms >= SPEECH_RMS_THRESHOLD) {
       speechFrameCountRef.current += 1;
     }
   }, 80);
+  return true;
 }
 
 function microphoneErrorMessage(reason: unknown): string {

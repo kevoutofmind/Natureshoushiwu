@@ -5,6 +5,21 @@ export type VoiceControlStatus =
   | 'completed'
   | 'error';
 
+export type VoiceInteractionStatus =
+  | 'off'
+  | 'standby'
+  | 'listening'
+  | 'processing'
+  | 'unsupported'
+  | 'error';
+
+export interface VoiceInteractionViewState {
+  status: VoiceInteractionStatus;
+  statusLabel: string;
+  userText: string;
+  lumiText: string;
+}
+
 export type SimpleVoiceCommandIntent =
   | 'PAUSE'
   | 'RESUME'

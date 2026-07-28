@@ -1,8 +1,11 @@
 export const RANDOM_ACTION_FAILURE_RATE = 0.5;
 
 export function passesRandomOnceEvaluation(
-  hasFailedBefore: boolean,
+  hasEvaluatedBefore: boolean,
+  mustPassAfterFailure: boolean,
   randomValue = Math.random(),
 ): boolean {
-  return hasFailedBefore || randomValue >= RANDOM_ACTION_FAILURE_RATE;
+  if (!hasEvaluatedBefore) return false;
+  if (mustPassAfterFailure) return true;
+  return randomValue >= RANDOM_ACTION_FAILURE_RATE;
 }
